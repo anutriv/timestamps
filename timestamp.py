@@ -10,6 +10,8 @@ PY_DIR = os.path.dirname(os.path.abspath(__file__))
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
+        # Debugging: Print request content type
+        print("Request Content-Type:", request.content_type)
         # Get uploaded files
         ass_file = request.files["ass_file"]
         mp4_file = request.files["mp4_file"]
@@ -17,7 +19,7 @@ def index():
 
         # Validate folder path
         if not output_folder:
-    return "Error: No output folder provided!", 400 
+    return "Error: No output folder provided!", 400 # Proper error response
 
         # Ensure the output directory exists
         os.makedirs(output_folder, exist_ok=True)
