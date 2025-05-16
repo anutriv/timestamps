@@ -4,8 +4,8 @@ from flask import Flask, request, render_template, send_file
 
 app = Flask(__name__)
 
-# Define base directory
-PY_DIR = "D:/cleanfile/TIMESTAMP"
+# Define base directory dynamically (works locally & on Render)
+PY_DIR = os.path.dirname(os.path.abspath(__file__))
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -16,8 +16,11 @@ def index():
         output_folder = request.form.get("output_folder").strip()
 
         # Validate folder path
-        if not output_folder or not os.path.isdir(output_folder):
+        if not output_folder:
             return "Invalid directory path. Please enter a valid folder.", 400
+
+        # Ensure the output directory exists
+        os.makedirs(output_folder, exist_ok=True)
 
         # Save uploaded files
         ass_file.save(os.path.join(PY_DIR, "input.ass"))
@@ -36,7 +39,8 @@ def index():
                 shutil.move(source_path, destination_path)
                 download_links.append(file)
 
-        return render_template("download.html", output_folder=output_folder, files=download_links)
+        return render_template("download.html", files=output_files)
+
 
     return render_template("index.html")  # Render the upload form
 
@@ -49,4 +53,4 @@ def download_file(filename):
         return "File not found", 404
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
