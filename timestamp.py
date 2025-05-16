@@ -7,6 +7,10 @@ app = Flask(__name__)
 # Define base directory dynamically (works locally & on Render)
 PY_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Define output directory inside Render
+OUTPUT_DIR = os.path.join(PY_DIR, "processed_output")
+os.makedirs(OUTPUT_DIR, exist_ok=True)  # Ensure it exists
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -17,14 +21,9 @@ def index():
         # Get uploaded files
         ass_file = request.files.get("ass_file")
         mp4_file = request.files.get("mp4_file")
-        output_folder = request.form.get("output_folder", "").strip()
 
-        # Validate folder path
-        if not output_folder:
-            return "Error: No output folder provided!", 400  # ✅ Proper indentation
-
-        # Ensure the output directory exists
-        os.makedirs(output_folder, exist_ok=True)
+        if not ass_file or not mp4_file:
+            return "Error: Missing uploaded files!", 400
 
         # Save uploaded files
         ass_file.save(os.path.join(PY_DIR, "input.ass"))
@@ -33,12 +32,12 @@ def index():
         # Run the processing script
         os.system(f"python {os.path.join(PY_DIR, 'swearsfinder.py')}")
 
-        # Move output files to the selected directory
+        # Move output files to the Render output directory
         output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
         download_links = []
         for file in output_files:
             source_path = os.path.join(PY_DIR, file)
-            destination_path = os.path.join(output_folder, file)
+            destination_path = os.path.join(OUTPUT_DIR, file)
             if os.path.exists(source_path):
                 shutil.move(source_path, destination_path)
                 download_links.append(file)
@@ -49,7 +48,7 @@ def index():
 
 @app.route("/download/<filename>")
 def download_file(filename):
-    file_path = os.path.join(PY_DIR, filename)
+    file_path = os.path.join(OUTPUT_DIR, filename)
     if os.path.exists(file_path):
         return send_file(file_path, as_attachment=True)
     else:
