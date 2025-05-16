@@ -213,4 +213,10 @@ model = whisper.load_model("medium")
 transcribe_audio_chunks(audio_chunks, model)
 extract_matching_timestamps("final.srt", "swears.txt", "timestamps.txt")
 
+# Clean up temporary files
+os.remove("input.mp3")  # Delete the MP3 file
+shutil.rmtree("audio_chunks")  # Remove the folder and all its contents
+
+print("Cleanup complete! All temporary files have been deleted.")
+
 print("Processing complete!")
