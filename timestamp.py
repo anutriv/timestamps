@@ -13,11 +13,11 @@ def index():
         # Get uploaded files
         ass_file = request.files["ass_file"]
         mp4_file = request.files["mp4_file"]
-        output_folder = request.form.get("output_folder").strip()
+        output_folder = request.form.get("output_folder", "").strip()
 
         # Validate folder path
         if not output_folder:
-            return "Invalid directory path. Please enter a valid folder.", 400
+    return "Error: No output folder provided!", 400 
 
         # Ensure the output directory exists
         os.makedirs(output_folder, exist_ok=True)
