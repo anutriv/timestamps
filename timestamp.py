@@ -12,14 +12,16 @@ def index():
     if request.method == "POST":
         # Debugging: Print request content type
         print("Request Content-Type:", request.content_type)
+        print("Received form data:", request.form)  # Debugging: Print received form data
+
         # Get uploaded files
-        ass_file = request.files["ass_file"]
-        mp4_file = request.files["mp4_file"]
+        ass_file = request.files.get("ass_file")
+        mp4_file = request.files.get("mp4_file")
         output_folder = request.form.get("output_folder", "").strip()
 
         # Validate folder path
         if not output_folder:
-    return "Error: No output folder provided!", 400 # Proper error response
+            return "Error: No output folder provided!", 400  # ✅ Proper indentation
 
         # Ensure the output directory exists
         os.makedirs(output_folder, exist_ok=True)
@@ -41,8 +43,7 @@ def index():
                 shutil.move(source_path, destination_path)
                 download_links.append(file)
 
-        return render_template("download.html", files=output_files)
-
+        return render_template("download.html", files=download_links)  # ✅ Fix variable name
 
     return render_template("index.html")  # Render the upload form
 
