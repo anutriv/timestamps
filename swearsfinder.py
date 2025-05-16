@@ -5,6 +5,7 @@ import subprocess
 import whisper
 import nltk
 from nltk.stem import WordNetLemmatizer
+import ffmpeg  # ✅ Import ffmpeg-python instead of PyAudio
 
 # Required packages
 REQUIRED_PACKAGES = ["nltk"]
@@ -40,88 +41,25 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ### Convert input.mp4 to input.mp3 ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     """Converts MP4 video to MP3 audio using FFmpeg."""
-    command = ["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3]
-    subprocess.run(command, check=True)
+    ffmpeg.input(input_mp4).output(output_mp3, format='mp3', acodec='libmp3lame').run()
 
 # Convert the video before proceeding with other steps
 convert_mp4_to_mp3(os.path.join(BASE_DIR, "input.mp4"), os.path.join(BASE_DIR, "input.mp3"))
 
-### Step 1: Censor swear words in .ass file ###
-def load_swears(file_path):
-    """Load swear words from file into a set, storing tense and plural variations, excluding exceptions."""
-    with open(file_path, 'r', encoding='utf-8') as file:
-        base_swears = {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
-    
-    expanded_swears = set(base_swears)
+### Extract audio chunks using FFmpeg ###
+def extract_audio(input_audio, output_audio, start_time, end_time):
+    """Extracts a specific time segment from the audio file using FFmpeg."""
+    ffmpeg.input(input_audio, ss=start_time, to=end_time).output(output_audio, format="mp3", acodec="libmp3lame").run()
 
-    for swear in base_swears:
-        expanded_swears.add(lemmatizer.lemmatize(swear, pos='v'))  # Verb form (handles past/present)
-        expanded_swears.add(lemmatizer.lemmatize(swear, pos='n'))  # Noun form (handles plural)
-
-    return expanded_swears
-
-def censor_word(word):
-    """Censor a word by keeping the first letter and replacing the rest with dots."""
-    return word[0] + '.' * (len(word) - 1) if len(word) > 1 else word
-
-def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
-    """Scan the .ass file, replace swear words including plural and tense variations, and save affected lines."""
-    swears = load_swears(swears_file)
-
-    with open(input_ass, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-
-    censored_lines, affected_lines, original_affected_lines = [], [], []
-
-    for line in lines:
-        original_line = line  
-        modified = False
-
-        words = re.findall(r'\b\w+\b', line)  
-        for word in words:
-            lemma_word = lemmatizer.lemmatize(word.lower(), pos='v')  
-            lemma_word_noun = lemmatizer.lemmatize(word.lower(), pos='n')  
-
-            if (lemma_word in swears or lemma_word_noun in swears) and word.lower() not in EXCEPTIONS:
-                censored_word = censor_word(word)
-                line = line.replace(word, censored_word)  
-                modified = True
-
-        censored_lines.append(line)
-
-        if modified and line.startswith("Dialogue:"):
-            affected_lines.append(line)
-            original_affected_lines.append(original_line)
-
-    # Save results
-    with open(output_ass, 'w', encoding='utf-8') as file:
-        file.writelines(censored_lines)
-
-    with open(clean_file, 'w', encoding='utf-8') as file:
-        file.writelines(affected_lines)
-
-    with open(unclean_file, 'w', encoding='utf-8') as file:
-        file.writelines(original_affected_lines)
-
-# Use dynamic paths
-censor_ass_file(
-    os.path.join(BASE_DIR, "input.ass"),
-    os.path.join(BASE_DIR, "swears.txt"),
-    os.path.join(BASE_DIR, "output.ass"),
-    os.path.join(BASE_DIR, "clean.txt"),
-    os.path.join(BASE_DIR, "unclean.txt")
-)
-
-### Step 2: Extract and transcribe audio chunks
+### Extract and transcribe audio chunks ###
 def extract_audio_chunks(input_mp3, unclean_txt, output_dir):
-    """Extracts individual audio chunks based on timestamps in unclean.txt."""
+    """Extracts individual audio chunks based on timestamps in unclean.txt using FFmpeg."""
     os.makedirs(output_dir, exist_ok=True)
     
     with open(unclean_txt, 'r', encoding='utf-8') as file:
         lines = file.readlines()
 
     audio_chunks = []
-
     for index, line in enumerate(lines):
         match = re.match(r'Dialogue: \d+,(.*?),(.*?),.*?,.*?,.*?,.*?,.*?,(.*)', line)
         if match:
@@ -143,7 +81,6 @@ audio_chunks = extract_audio_chunks(
 )
 
 model = whisper.load_model("medium")
-
 transcribe_audio_chunks(audio_chunks, model)
 
 extract_matching_timestamps(
