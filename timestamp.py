@@ -22,7 +22,7 @@ def index():
         py_dir = "D:/cleanfile/TIMESTAMP"  # Python script directory
 
         # Use Tkinter to select the output folder dynamically
-        ass_dir = select_folder().strip()
+        ass_dir = request.form.get("output_folder").strip()
 
         # Debugging output
         print(f"Selected ASS file directory: {ass_dir}")
