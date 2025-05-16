@@ -1,10 +1,12 @@
 <form method="POST" enctype="multipart/form-data">
-    <label for="ass_file">Select ASS File:</label>
-    <input type="file" name="ass_file" required>
+    <label for="ass_file">Upload ASS File:</label>
+    <input type="file" name="ass_file" required><br>
 
-    <label for="mp4_file">Select MP4 File:</label>
-    <input type="file" name="mp4_file" required>
+    <label for="mp4_file">Upload MP4 File:</label>
+    <input type="file" name="mp4_file" required><br>
 
-    <!-- No need for folder selection in HTML -->
-    <button type="submit">Run Script</button>
+    <label for="output_folder">Enter Output Folder Path:</label>
+    <input type="text" name="output_folder" required><br>
+
+    <button type="submit">Process</button>
 </form>
