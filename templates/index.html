@@ -1,31 +1,52 @@
-<script>
-    function uploadFiles(event) {
-        event.preventDefault(); // Prevent form submission until files are fully uploaded
-        
-        let formData = new FormData(document.getElementById("uploadForm"));
-        let xhr = new XMLHttpRequest();
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Files</title>
+    <script>
+        function uploadFiles(event) {
+            event.preventDefault(); // Prevent premature submission
+            
+            let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
 
-        xhr.open("POST", "/", true);
+            xhr.open("POST", "/", true);
 
-        // ✅ Hide the default "Waiting for upload..." message until upload starts
-        document.getElementById("progress").innerHTML = "";
+            document.getElementById("progress").innerHTML = "⏳ Uploading..."; // ✅ Ensure initial update
 
-        xhr.upload.onprogress = function(event) {
-            if (event.lengthComputable) {
-                let percent = (event.loaded / event.total) * 100;
-                document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
-            }
-        };
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                document.getElementById("submitBtn").disabled = false; // Enable button
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Upload failed!";
-            }
-        };
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("submitBtn").disabled = false; // Enable button
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
 
-        xhr.send(formData);
-    }
-</script>
+            xhr.send(formData);
+        }
+    </script>
+</head>
+<body>
+    <h2>Upload Files for Processing</h2>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label for="ass_file">Upload ASS File:</label>
+        <input type="file" id="ass_file" name="ass_file" required><br>
+
+        <label for="mp4_file">Upload MP4 File:</label>
+        <input type="file" id="mp4_file" name="mp4_file" required><br>
+
+        <p id="progress">⚠️ Waiting for upload...</p> <!-- Show Upload Progress -->
+
+        <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
+    </form>
+</body>
+</html>
