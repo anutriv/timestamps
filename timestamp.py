@@ -16,9 +16,8 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)  # Ensure it exists
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        # Debugging: Print request content type
         print("Request Content-Type:", request.content_type)
-        print("Received form data:", request.form)  # Debugging: Print received form data
+        print("Received form data:", request.form)  # Debugging
 
         # Get uploaded files
         ass_file = request.files.get("ass_file")
@@ -35,42 +34,52 @@ def index():
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
 
-        # ✅ Wait until file size stops changing (ensuring full upload)
+        # ✅ Ensure full upload by checking file size stability
         prev_size = 0
         while True:
-            time.sleep(2)  # Small delay to check file size changes
+            time.sleep(2)
             current_size = os.path.getsize(mp4_path)
             if current_size == prev_size:
                 break
             prev_size = current_size
 
-        print("✅ Files are fully uploaded. Proceeding with processing.")
+        print("✅ Files are fully uploaded. Proceeding to processing.")
 
-        # Redirect to processing page **only after full upload confirmation**
+        # Redirect to processing page only after full upload confirmation
         return render_template("processing.html")
 
     return render_template("index.html")  # ✅ Ensures GET requests show the upload form first
 
 @app.route("/process")
 def process():
-    """Starts processing and moves files."""
-    # Run the processing script
-    os.system(f"python {os.path.join(PY_DIR, 'swearsfinder.py')}")
+    """Starts processing and stops execution on error."""
+    try:
+        result = subprocess.run(
+            ["python", os.path.join(PY_DIR, "swearsfinder.py")],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
 
-    # Debugging: Check generated files in Render
-    print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
+        # ✅ Stop if an error occurs
+        if result.returncode != 0:
+            error_message = result.stderr.decode("utf-8")
+            return f"❌ Processing failed! Error: {error_message}", 500
 
-    # Move output files to the Render output directory
-    output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
-    download_links = []
-    for file in output_files:
-        source_path = os.path.join(PY_DIR, file)
-        destination_path = os.path.join(OUTPUT_DIR, file)
-        if os.path.exists(source_path):
-            shutil.move(source_path, destination_path)
-            download_links.append(file)
+        print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
 
-    return render_template("download.html", files=download_links)  # ✅ Fix variable name
+        # Move output files to Render output directory
+        output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
+        download_links = []
+        for file in output_files:
+            source_path = os.path.join(PY_DIR, file)
+            destination_path = os.path.join(OUTPUT_DIR, file)
+            if os.path.exists(source_path):
+                shutil.move(source_path, destination_path)
+                download_links.append(file)
+
+        return render_template("download.html", files=download_links)  # ✅ Fix variable name
+
+    except Exception as e:
+        return f"❌ Fatal error: {str(e)}", 500
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -84,9 +93,17 @@ def download_file(filename):
 def stream():
     """Stream script output live to the web page **only after processing starts**."""
     def generate_output():
-        process = subprocess.Popen(["python", os.path.join(PY_DIR, "swearsfinder.py")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(
+            ["python", os.path.join(PY_DIR, "swearsfinder.py")], 
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        
         for line in iter(process.stdout.readline, b""):
             yield f"data: {line.decode('utf-8')}\n\n"
+
+        error_output = process.stderr.read().decode("utf-8")
+        if error_output:
+            yield f"data: ❌ Error: {error_output}\n\n"
 
     return Response(generate_output(), mimetype="text/event-stream")
 
