@@ -2,33 +2,34 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Upload Files</title>
+    <title>Upload & Process Files</title>
 </head>
 <body>
     <h2>Upload Files for Processing</h2>
     
     <form id="uploadForm" enctype="multipart/form-data">
         <label for="ass_file">Upload ASS File:</label>
-        <input type="file" id="ass_file" name="ass_file" required onchange="checkFiles()"><br>
+        <input type="file" id="ass_file" name="ass_file" required onchange="validateFiles()"><br>
 
         <label for="mp4_file">Upload MP4 File:</label>
-        <input type="file" id="mp4_file" name="mp4_file" required onchange="checkFiles()"><br>
+        <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
 
         <p id="progress"></p> <!-- Shows Upload Progress -->
         <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
 
-        <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
+        <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
+        <button onclick="runProcessing(event)" id="processBtn" disabled>Get Timestamp</button>
     </form>
 
     <script>
-        function checkFiles() {
+        function validateFiles() {
             let assFile = document.getElementById("ass_file").files[0];
             let mp4File = document.getElementById("mp4_file").files[0];
             let errorMessage = document.getElementById("errorMessage");
-            let submitBtn = document.getElementById("submitBtn");
+            let uploadBtn = document.getElementById("uploadBtn");
 
-            errorMessage.innerHTML = ""; // Clear any previous errors
-            submitBtn.disabled = true; // Disable button until validation passes
+            errorMessage.innerHTML = ""; // Clear previous errors
+            uploadBtn.disabled = true; // Disable button until validation passes
 
             if (!assFile || !mp4File) {
                 errorMessage.innerHTML = "⚠️ Please select both files.";
@@ -45,9 +46,9 @@
                 return;
             }
 
-            // ✅ Enable button once validation is passed
+            // ✅ Enable upload button once validation is passed
             errorMessage.innerHTML = "";  
-            submitBtn.disabled = false;
+            uploadBtn.disabled = false;
         }
 
         function uploadFiles(event) {
@@ -56,7 +57,7 @@
             let formData = new FormData(document.getElementById("uploadForm"));
             let xhr = new XMLHttpRequest();
 
-            xhr.open("POST", "/", true);
+            xhr.open("POST", "/upload", true);
             document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
             xhr.upload.onprogress = function(event) {
@@ -68,19 +69,10 @@
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Upload Complete! Starting Processing...";
-
-                    // ✅ Call `/process` using AJAX instead of a redirect
-                    let processXhr = new XMLHttpRequest();
-                    processXhr.open("GET", "/process", true);
-                    processXhr.onload = function() {
-                        if (processXhr.status === 200) {
-                            document.getElementById("progress").innerHTML = "🚀 Processing complete!";
-                        } else {
-                            document.getElementById("progress").innerHTML = "❌ Error in processing!";
-                        }
-                    };
-                    processXhr.send();
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    
+                    // ✅ Enable processing button after upload
+                    document.getElementById("processBtn").disabled = false;
                 } else {
                     document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }
@@ -91,6 +83,40 @@
             };
 
             xhr.send(formData);
+        }
+
+        function runProcessing(event) {
+            event.preventDefault();
+
+            let xhr = new XMLHttpRequest();
+            xhr.open("GET", "/process", true);
+            document.getElementById("progress").innerHTML = "⏳ Processing started...";
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Processing complete! Downloading files...";
+
+                    // ✅ Start downloading all output files
+                    let outputFiles = ["unclean.txt", "clean.txt", "final.srt", "output.ass", "timestamps.txt"];
+                    outputFiles.forEach(file => {
+                        let link = document.createElement("a");
+                        link.href = `/download/${file}`;
+                        link.download = file;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    });
+
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Error in processing!";
+                }
+            };
+
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
+
+            xhr.send();
         }
     </script>
 </body>
