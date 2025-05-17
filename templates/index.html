@@ -1,112 +1,90 @@
-import os
-import shutil
-import subprocess
-import time
-from flask import Flask, request, render_template, send_file, Response
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Files</title>
+</head>
+<body>
+    <h2>Upload Files for Processing</h2>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label for="ass_file">Upload ASS File:</label>
+        <input type="file" id="ass_file" name="ass_file" required onchange="checkFiles()"><br>
 
-app = Flask(__name__)
+        <label for="mp4_file">Upload MP4 File:</label>
+        <input type="file" id="mp4_file" name="mp4_file" required onchange="checkFiles()"><br>
 
-# Define base directory dynamically (works locally & on Render)
-PY_DIR = os.path.dirname(os.path.abspath(__file__))
+        <p id="progress"></p> <!-- Shows Upload Progress -->
+        <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
 
-# Define output directory inside Render
-OUTPUT_DIR = os.path.join(PY_DIR, "processed_output")
-os.makedirs(OUTPUT_DIR, exist_ok=True)  # Ensure it exists
+        <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
+    </form>
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "POST":
-        print("Request Content-Type:", request.content_type)
-        print("Received form data:", request.form)  # Debugging
+    <script>
+        function checkFiles() {
+            let assFile = document.getElementById("ass_file").files[0];
+            let mp4File = document.getElementById("mp4_file").files[0];
+            let errorMessage = document.getElementById("errorMessage");
+            let submitBtn = document.getElementById("submitBtn");
 
-        # Get uploaded files
-        ass_file = request.files.get("ass_file")
-        mp4_file = request.files.get("mp4_file")
+            errorMessage.innerHTML = ""; // Clear any previous errors
+            submitBtn.disabled = true; // Disable button until validation passes
 
-        if not ass_file or not mp4_file:
-            return "Error: Missing uploaded files!", 400
+            if (!assFile || !mp4File) {
+                errorMessage.innerHTML = "⚠️ Please select both files.";
+                return;
+            }
 
-        # Define file paths with new fixed names
-        ass_path = os.path.join(PY_DIR, "input.ass")
-        mp4_path = os.path.join(PY_DIR, "input.mp4")
+            // ✅ Validate file types
+            if (!assFile.name.endsWith(".ass")) {
+                errorMessage.innerHTML = "❌ Invalid .ASS file selected.";
+                return;
+            }
+            if (!mp4File.name.endsWith(".mp4")) {
+                errorMessage.innerHTML = "❌ Invalid .MP4 file selected.";
+                return;
+            }
 
-        # ✅ Rename and save uploaded files
-        ass_file.save(ass_path)
-        mp4_file.save(mp4_path)
+            // ✅ Enable button once validation is passed
+            errorMessage.innerHTML = "";  
+            submitBtn.disabled = false;
+        }
 
-        print("✅ Files uploaded and renamed: input.ass, input.mp4")
+        function uploadFiles(event) {
+            event.preventDefault();
+            
+            let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
 
-        # ✅ Ensure full upload by checking file size stability
-        prev_size = 0
-        while True:
-            time.sleep(2)
-            current_size = os.path.getsize(mp4_path)
-            if current_size == prev_size:
-                break
-            prev_size = current_size
+            xhr.open("POST", "/", true);
+            document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
-        print("✅ Files are fully uploaded. Proceeding to processing.")
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
 
-        return render_template("processing.html")
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    
+                    // ✅ Ensure Flask processing starts after upload finishes
+                    setTimeout(() => {
+                        window.location.href = "/process";
+                    }, 1000);
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
 
-    return render_template("index.html")  # ✅ Ensures GET requests show the upload form first
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
 
-@app.route("/process")
-def process():
-    """Starts processing and stops execution on error."""
-    try:
-        result = subprocess.run(
-            ["python", os.path.join(PY_DIR, "swearsfinder.py")],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-
-        # ✅ Stop if an error occurs
-        if result.returncode != 0:
-            error_message = result.stderr.decode("utf-8")
-            return f"❌ Processing failed! Error: {error_message}", 500
-
-        print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
-
-        # Move output files to Render output directory
-        output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
-        download_links = []
-        for file in output_files:
-            source_path = os.path.join(PY_DIR, file)
-            destination_path = os.path.join(OUTPUT_DIR, file)
-            if os.path.exists(source_path):
-                shutil.move(source_path, destination_path)
-                download_links.append(file)
-
-        return render_template("download.html", files=download_links)
-
-    except Exception as e:
-        return f"❌ Fatal error: {str(e)}", 500
-
-@app.route("/download/<filename>")
-def download_file(filename):
-    file_path = os.path.join(OUTPUT_DIR, filename)
-    if os.path.exists(file_path):
-        return send_file(file_path, as_attachment=True)
-    else:
-        return "File not found", 404
-
-@app.route("/stream")
-def stream():
-    """Stream script output live to the web page **only after processing starts**."""
-    def generate_output():
-        process = subprocess.Popen(
-            ["python", os.path.join(PY_DIR, "swearsfinder.py")], 
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        
-        for line in iter(process.stdout.readline, b""):
-            yield f"data: {line.decode('utf-8')}\n\n"
-
-        error_output = process.stderr.read().decode("utf-8")
-        if error_output:
-            yield f"data: ❌ Error: {error_output}\n\n"
-
-    return Response(generate_output(), mimetype="text/event-stream")
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
