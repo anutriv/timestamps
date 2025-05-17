@@ -2,17 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Live Script Output</title>
+    <title>Upload Files</title>
 </head>
 <body>
-    <h2>Processing Output</h2>
-    <pre id="output"></pre> <!-- Area where logs appear -->
+    <h2>Upload Files for Processing</h2>
+    
+    <form action="/" method="POST" enctype="multipart/form-data">
+        <label for="ass_file">Upload ASS File:</label>
+        <input type="file" name="ass_file" required><br>
 
-    <script>
-        var eventSource = new EventSource("/stream");
-        eventSource.onmessage = function(event) {
-            document.getElementById("output").innerHTML += event.data + "<br>";
-        };
-    </script>
+        <label for="mp4_file">Upload MP4 File:</label>
+        <input type="file" name="mp4_file" required><br>
+
+        <button type="submit">Start Processing</button>
+    </form>
 </body>
 </html>
