@@ -63,7 +63,11 @@ def process():
         # ✅ Stop if an error occurs
         if result.returncode != 0:
             error_message = result.stderr.decode("utf-8")
-            return f"❌ Processing failed! Error: {error_message}", 500
+            return f"❌ Processing failed! Error details:\n{error_message}", 500
+
+        return "✅ Processing complete!", 200
+    except Exception as e:
+        return f"❌ Fatal error: {str(e)}", 500
 
         print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
 
