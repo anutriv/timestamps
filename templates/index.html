@@ -1,40 +1,62 @@
-<script>
-    function checkFiles() {
-        let assFile = document.getElementById("ass_file").files.length > 0;
-        let mp4File = document.getElementById("mp4_file").files.length > 0;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Files</title>
+</head>
+<body>
+    <h2>Upload Files for Processing</h2>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label for="ass_file">Upload ASS File:</label>
+        <input type="file" id="ass_file" name="ass_file" required onchange="checkFiles()"><br>
 
-        // ✅ Only show status when both files are selected
-        if (assFile && mp4File) {
-            document.getElementById("progress").innerHTML = "⏳ Upload in progress...";
-        } else {
-            document.getElementById("progress").innerHTML = "";  // Hide default message
-        }
-    }
+        <label for="mp4_file">Upload MP4 File:</label>
+        <input type="file" id="mp4_file" name="mp4_file" required onchange="checkFiles()"><br>
 
-    function uploadFiles(event) {
-        event.preventDefault(); // Prevent premature submission
-        
-        let formData = new FormData(document.getElementById("uploadForm"));
-        let xhr = new XMLHttpRequest();
+        <p id="progress"></p> <!-- 🚀 This starts blank until upload begins -->
 
-        xhr.open("POST", "/", true);
+        <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
+    </form>
 
-        xhr.upload.onprogress = function(event) {
-            if (event.lengthComputable) {
-                let percent = (event.loaded / event.total) * 100;
-                document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
-            }
-        };
+    <script>
+        function checkFiles() {
+            let assFile = document.getElementById("ass_file").files.length > 0;
+            let mp4File = document.getElementById("mp4_file").files.length > 0;
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                document.getElementById("submitBtn").disabled = false; // Enable button
+            if (assFile && mp4File) {
+                document.getElementById("progress").innerHTML = "Files selected, ready to upload!";
             } else {
-                document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                document.getElementById("progress").innerHTML = "";  // ✅ This prevents premature messages
             }
-        };
+        }
 
-        xhr.send(formData);
-    }
-</script>
+        function uploadFiles(event) {
+            event.preventDefault();
+            
+            let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
+
+            xhr.open("POST", "/", true);
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("submitBtn").disabled = false;
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
+
+            xhr.send(formData);
+        }
+    </script>
+</body>
+</html>
