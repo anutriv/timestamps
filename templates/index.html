@@ -3,18 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <title>Upload Files</title>
+    <script>
+        function checkUploads() {
+            let assFile = document.getElementById("ass_file").files.length > 0;
+            let mp4File = document.getElementById("mp4_file").files.length > 0;
+            
+            if (assFile && mp4File) {
+                document.getElementById("status").innerHTML = "✅ Both files uploaded successfully!";
+                document.getElementById("submitBtn").disabled = false;
+            } else {
+                document.getElementById("status").innerHTML = "⚠️ Please upload both files.";
+                document.getElementById("submitBtn").disabled = true;
+            }
+        }
+    </script>
 </head>
 <body>
     <h2>Upload Files for Processing</h2>
     
     <form action="/" method="POST" enctype="multipart/form-data">
         <label for="ass_file">Upload ASS File:</label>
-        <input type="file" name="ass_file" required><br>
+        <input type="file" id="ass_file" name="ass_file" required onchange="checkUploads()"><br>
 
         <label for="mp4_file">Upload MP4 File:</label>
-        <input type="file" name="mp4_file" required><br>
+        <input type="file" id="mp4_file" name="mp4_file" required onchange="checkUploads()"><br>
 
-        <button type="submit">Start Processing</button>
+        <p id="status">⚠️ Please upload both files.</p> <!-- Status Message -->
+
+        <button type="submit" id="submitBtn" disabled>Run Processing</button> <!-- Initially Disabled -->
     </form>
 </body>
 </html>
