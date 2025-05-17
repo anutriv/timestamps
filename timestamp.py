@@ -26,13 +26,15 @@ def index():
         if not ass_file or not mp4_file:
             return "Error: Missing uploaded files!", 400
 
-        # Define file paths
+        # Define file paths with new fixed names
         ass_path = os.path.join(PY_DIR, "input.ass")
         mp4_path = os.path.join(PY_DIR, "input.mp4")
 
-        # Save uploaded files
+        # ✅ Rename and save uploaded files
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
+
+        print("✅ Files uploaded and renamed: input.ass, input.mp4")
 
         # ✅ Ensure full upload by checking file size stability
         prev_size = 0
@@ -45,7 +47,6 @@ def index():
 
         print("✅ Files are fully uploaded. Proceeding to processing.")
 
-        # Redirect to processing page only after full upload confirmation
         return render_template("processing.html")
 
     return render_template("index.html")  # ✅ Ensures GET requests show the upload form first
@@ -76,7 +77,7 @@ def process():
                 shutil.move(source_path, destination_path)
                 download_links.append(file)
 
-        return render_template("download.html", files=download_links)  # ✅ Fix variable name
+        return render_template("download.html", files=download_links)
 
     except Exception as e:
         return f"❌ Fatal error: {str(e)}", 500

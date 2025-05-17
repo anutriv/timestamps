@@ -5,14 +5,18 @@ import subprocess
 import whisper
 import nltk
 from nltk.stem import WordNetLemmatizer
-import ffmpeg  # ✅ Import ffmpeg-python instead of PyAudio
+import ffmpeg  # ✅ Import ffmpeg-python
 
-# Required packages
+from flask import Flask, request, render_template
+
+app = Flask(__name__)
+
+# Define base directory dynamically (works locally & on Render)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Install missing packages
 REQUIRED_PACKAGES = ["nltk"]
-
-# Function to check and install missing Python packages
 def install_missing_packages():
-    """Check for required Python packages and install missing ones."""
     for package in REQUIRED_PACKAGES:
         try:
             __import__(package)
@@ -20,43 +24,49 @@ def install_missing_packages():
             print(f"Installing missing package: {package}")
             subprocess.run([sys.executable, "-m", "pip", "install", package], check=True)
 
-# Ensure NLTK resources are available
-def setup_nltk():
-    """Ensure NLTK resources are downloaded."""
-    nltk.download('wordnet')
-
-# Perform setup
 install_missing_packages()
-setup_nltk()
+nltk.download('wordnet')
 
-# Initialize lemmatizer
 lemmatizer = WordNetLemmatizer()
 
-# Define exceptions for words that should NOT be censored
 EXCEPTIONS = {"as", "pass", "bass"}
 
-# Define base directory dynamically (works locally & on Render)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        # Get uploaded files
+        ass_file = request.files.get("ass_file")
+        mp4_file = request.files.get("mp4_file")
 
-### Convert input.mp4 to input.mp3 ###
+        if not ass_file or not mp4_file:
+            return "Error: Missing uploaded files!", 400
+
+        # Define file paths with new fixed names
+        ass_path = os.path.join(BASE_DIR, "input.ass")
+        mp4_path = os.path.join(BASE_DIR, "input.mp4")
+
+        # ✅ Rename and save uploaded files
+        ass_file.save(ass_path)
+        mp4_file.save(mp4_path)
+
+        print("✅ Files uploaded and renamed: input.ass, input.mp4")
+
+        return render_template("processing.html")
+
+    return render_template("index.html")
+
 def convert_mp4_to_mp3(input_mp4, output_mp3):
-    """Converts MP4 video to MP3 audio using FFmpeg."""
     ffmpeg.input(input_mp4).output(output_mp3, format='mp3', acodec='libmp3lame').run()
 
-# Convert the video before proceeding with other steps
 convert_mp4_to_mp3(os.path.join(BASE_DIR, "input.mp4"), os.path.join(BASE_DIR, "input.mp3"))
 
-### Extract audio chunks using FFmpeg ###
 def extract_audio(input_audio, output_audio, start_time, end_time):
-    """Extracts a specific time segment from the audio file using FFmpeg."""
     ffmpeg.input(input_audio, ss=start_time, to=end_time).output(output_audio, format="mp3", acodec="libmp3lame").run()
 
-### Extract and transcribe audio chunks ###
 def extract_audio_chunks(input_mp3, unclean_txt, output_dir):
-    """Extracts individual audio chunks based on timestamps in unclean.txt using FFmpeg."""
     os.makedirs(output_dir, exist_ok=True)
 
-    # ✅ Check if `unclean.txt` exists before proceeding
+    # ✅ Check if `unclean.txt` exists
     if not os.path.exists(unclean_txt):
         raise FileNotFoundError(f"❌ Error: '{unclean_txt}' not found. Ensure it is generated before processing.")
 
@@ -77,8 +87,6 @@ def extract_audio_chunks(input_mp3, unclean_txt, output_dir):
 
     return audio_chunks
 
-
-# Use dynamic paths
 audio_chunks = extract_audio_chunks(
     os.path.join(BASE_DIR, "input.mp3"),
     os.path.join(BASE_DIR, "unclean.txt"),
@@ -94,9 +102,8 @@ extract_matching_timestamps(
     os.path.join(BASE_DIR, "timestamps.txt")
 )
 
-# Clean up temporary files
-os.remove(os.path.join(BASE_DIR, "input.mp3"))  # Delete MP3 file
-shutil.rmtree(os.path.join(BASE_DIR, "audio_chunks"))  # Remove folder
+os.remove(os.path.join(BASE_DIR, "input.mp3"))
+shutil.rmtree(os.path.join(BASE_DIR, "audio_chunks"))
 
-print("Cleanup complete! All temporary files have been deleted.")
-print("Processing complete!")
+print("✅ Cleanup complete! All temporary files deleted.")
+print("✅ Processing complete!")
