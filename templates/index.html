@@ -68,12 +68,19 @@
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                    
-                    // ✅ Ensure Flask processing starts after upload finishes
-                    setTimeout(() => {
-                        window.location.href = "/process";
-                    }, 1000);
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete! Starting Processing...";
+
+                    // ✅ Call `/process` using AJAX instead of a redirect
+                    let processXhr = new XMLHttpRequest();
+                    processXhr.open("GET", "/process", true);
+                    processXhr.onload = function() {
+                        if (processXhr.status === 200) {
+                            document.getElementById("progress").innerHTML = "🚀 Processing complete!";
+                        } else {
+                            document.getElementById("progress").innerHTML = "❌ Error in processing!";
+                        }
+                    };
+                    processXhr.send();
                 } else {
                     document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }
