@@ -22,6 +22,8 @@
     </form>
 
     <script>
+        const RENDER_URL = "https://timestamps-5nub.onrender.com/";  // ✅ Replace with actual Render service URL
+
         function validateFiles() {
             let assFile = document.getElementById("ass_file").files[0];
             let mp4File = document.getElementById("mp4_file").files[0];
@@ -57,7 +59,7 @@
             let formData = new FormData(document.getElementById("uploadForm"));
             let xhr = new XMLHttpRequest();
 
-            xhr.open("POST", "/upload", true);
+            xhr.open("POST", `${RENDER_URL}/upload`, true);  // ✅ Updated to use Render service URL
             document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
             xhr.upload.onprogress = function(event) {
@@ -89,7 +91,7 @@
             event.preventDefault();
 
             let xhr = new XMLHttpRequest();
-            xhr.open("GET", "/process", true);
+            xhr.open("GET", `${RENDER_URL}/process`, true);  // ✅ Updated to use Render service URL
             document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
             xhr.onload = function() {
@@ -100,7 +102,7 @@
                     let outputFiles = ["unclean.txt", "clean.txt", "final.srt", "output.ass", "timestamps.txt"];
                     outputFiles.forEach(file => {
                         let link = document.createElement("a");
-                        link.href = `/download/${file}`;
+                        link.href = `${RENDER_URL}/download/${file}`;  // ✅ Updated to use Render service URL
                         link.download = file;
                         document.body.appendChild(link);
                         link.click();
