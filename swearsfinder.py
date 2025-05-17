@@ -14,6 +14,15 @@ app = Flask(__name__)
 # Define base directory dynamically (works locally & on Render)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Check for required files
+required_files = ["input.mp4", "input.ass"]
+missing_files = [file for file in required_files if not os.path.exists(os.path.join(BASE_DIR, file))]
+
+if missing_files:
+    print(f"❌ Error: Missing required files: {', '.join(missing_files)}")
+else:
+    print("✅ All required files are present.")
+
 # Install missing packages
 REQUIRED_PACKAGES = ["nltk"]
 def install_missing_packages():

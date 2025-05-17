@@ -13,17 +13,6 @@ PY_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(PY_DIR, "processed_output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)  # Ensure it exists
 
-# ✅ Check if required files exist before starting Flask
-def verify_required_files():
-    required_files = ["input.ass", "input.mp4"]
-    missing_files = [file for file in required_files if not os.path.exists(os.path.join(PY_DIR, file))]
-    
-    if missing_files:
-        print(f"❌ Error: Missing required files: {', '.join(missing_files)}")
-        exit(1)  # Exit script if files are missing
-
-verify_required_files()  # Run the check
-
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
