@@ -1,6 +1,7 @@
 import os
 import shutil
-from flask import Flask, request, render_template, send_file
+import subprocess
+from flask import Flask, request, render_template, send_file, Response
 
 app = Flask(__name__)
 
@@ -32,6 +33,9 @@ def index():
         # Run the processing script
         os.system(f"python {os.path.join(PY_DIR, 'swearsfinder.py')}")
 
+        # Debugging: Check generated files in Render
+        print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
+
         # Move output files to the Render output directory
         output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
         download_links = []
@@ -54,5 +58,15 @@ def download_file(filename):
     else:
         return "File not found", 404
 
+@app.route("/stream")
+def stream():
+    """Stream script output live to the web page."""
+    def generate_output():
+        process = subprocess.Popen(["python", os.path.join(PY_DIR, "swearsfinder.py")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        for line in iter(process.stdout.readline, b""):
+            yield f"data: {line.decode('utf-8')}\n\n"
+
+    return Response(generate_output(), mimetype="text/event-stream")
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 10000)))
