@@ -2,8 +2,10 @@ import os
 import shutil
 import subprocess
 from flask import Flask, request, render_template, send_file
+from flask_cors import CORS  # ✅ Import Flask-CORS
 
 app = Flask(__name__)
+CORS(app)  # ✅ Allow cross-origin requests
 
 # ✅ Increase Flask’s request size limit (500MB)
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB limit
