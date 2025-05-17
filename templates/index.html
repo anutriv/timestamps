@@ -1,81 +1,33 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload Files</title>
-</head>
-<body>
-    <h2>Upload Files for Processing</h2>
-    
-    <form id="uploadForm" enctype="multipart/form-data">
-        <label for="ass_file">Upload ASS File:</label>
-        <input type="file" id="ass_file" name="ass_file" required onchange="checkFiles()"><br>
+<script>
+    function uploadFiles(event) {
+        event.preventDefault();
+        
+        let formData = new FormData(document.getElementById("uploadForm"));
+        let xhr = new XMLHttpRequest();
 
-        <label for="mp4_file">Upload MP4 File:</label>
-        <input type="file" id="mp4_file" name="mp4_file" required onchange="checkFiles()"><br>
+        xhr.open("POST", "/", true);
+        document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
-        <p id="progress"></p> <!-- 🚀 This starts blank until upload begins -->
-        <p id="errorMessage" style="color: red;"></p> <!-- 🚀 Error messages will be displayed here -->
-
-        <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
-    </form>
-
-    <script>
-        function checkFiles() {
-            let assFile = document.getElementById("ass_file").files[0];
-            let mp4File = document.getElementById("mp4_file").files[0];
-            let errorMessage = document.getElementById("errorMessage");
-            let submitBtn = document.getElementById("submitBtn");
-
-            errorMessage.innerHTML = ""; // Clear any previous errors
-            submitBtn.disabled = true; // Disable button until validation passes
-
-            if (!assFile || !mp4File) {
-                errorMessage.innerHTML = "⚠️ Please select both files.";
-                return;
+        xhr.upload.onprogress = function(event) {
+            if (event.lengthComputable) {
+                let percent = (event.loaded / event.total) * 100;
+                document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
             }
+        };
 
-            // ✅ Ensure correct file types are selected
-            if (!assFile.name.endsWith(".ass")) {
-                errorMessage.innerHTML = "❌ Please upload a valid .ASS file.";
-                return;
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                
+                // ✅ Automatically redirect to processing page after upload
+                setTimeout(function() {
+                    window.location.href = "/processing";
+                }, 1000); // Small delay before redirecting
+            } else {
+                document.getElementById("progress").innerHTML = "❌ Upload failed!";
             }
-            if (!mp4File.name.endsWith(".mp4")) {
-                errorMessage.innerHTML = "❌ Please upload a valid .MP4 file.";
-                return;
-            }
+        };
 
-            // ✅ Enable processing button only when valid files are selected
-            errorMessage.innerHTML = "";  
-            submitBtn.disabled = false;
-        }
-
-        function uploadFiles(event) {
-            event.preventDefault();
-            
-            let formData = new FormData(document.getElementById("uploadForm"));
-            let xhr = new XMLHttpRequest();
-
-            xhr.open("POST", "/", true);
-            document.getElementById("progress").innerHTML = "⏳ Uploading...";
-
-            xhr.upload.onprogress = function(event) {
-                if (event.lengthComputable) {
-                    let percent = (event.loaded / event.total) * 100;
-                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
-                }
-            };
-
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                } else {
-                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
-                }
-            };
-
-            xhr.send(formData);
-        }
-    </script>
-</body>
-</html>
+        xhr.send(formData);
+    }
+</script>
