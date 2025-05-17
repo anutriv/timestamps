@@ -5,6 +5,9 @@ from flask import Flask, request, render_template, send_file
 
 app = Flask(__name__)
 
+# ✅ Increase Flask’s request size limit (500MB)
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB limit
+
 # Define Render project directory
 BASE_DIR = "/opt/render/project/src"
 
