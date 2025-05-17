@@ -30,25 +30,31 @@ def index():
         ass_file.save(os.path.join(PY_DIR, "input.ass"))
         mp4_file.save(os.path.join(PY_DIR, "input.mp4"))
 
-        # Run the processing script
-        os.system(f"python {os.path.join(PY_DIR, 'swearsfinder.py')}")
-
-        # Debugging: Check generated files in Render
-        print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
-
-        # Move output files to the Render output directory
-        output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
-        download_links = []
-        for file in output_files:
-            source_path = os.path.join(PY_DIR, file)
-            destination_path = os.path.join(OUTPUT_DIR, file)
-            if os.path.exists(source_path):
-                shutil.move(source_path, destination_path)
-                download_links.append(file)
-
-        return render_template("download.html", files=download_links)  # ✅ Fix variable name
+        # ✅ Redirect to processing page instead of running script immediately
+        return render_template("processing.html")  
 
     return render_template("index.html")  # Render the upload form
+
+@app.route("/process")
+def process():
+    """Starts processing and moves files."""
+    # Run the processing script
+    os.system(f"python {os.path.join(PY_DIR, 'swearsfinder.py')}")
+
+    # Debugging: Check generated files in Render
+    print("Generated Files:", os.listdir(os.path.join(PY_DIR, "processed_output")))
+
+    # Move output files to the Render output directory
+    output_files = ["output.ass", "final.srt", "clean.txt", "unclean.txt", "timestamps.txt"]
+    download_links = []
+    for file in output_files:
+        source_path = os.path.join(PY_DIR, file)
+        destination_path = os.path.join(OUTPUT_DIR, file)
+        if os.path.exists(source_path):
+            shutil.move(source_path, destination_path)
+            download_links.append(file)
+
+    return render_template("download.html", files=download_links)  # ✅ Fix variable name
 
 @app.route("/download/<filename>")
 def download_file(filename):
@@ -60,7 +66,7 @@ def download_file(filename):
 
 @app.route("/stream")
 def stream():
-    """Stream script output live to the web page."""
+    """Stream script output live to the web page **only after processing starts**."""
     def generate_output():
         process = subprocess.Popen(["python", os.path.join(PY_DIR, "swearsfinder.py")], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for line in iter(process.stdout.readline, b""):

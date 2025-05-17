@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Processing Output</title>
+</head>
+<body>
+    <h2>Processing Output</h2>
+    <pre id="output"></pre> <!-- Area where logs appear -->
+
+    <script>
+        var eventSource = new EventSource("/stream");
+
+        eventSource.onmessage = function(event) {
+            document.getElementById("output").innerHTML += event.data + "<br>";
+
+            // ✅ Stop streaming when "Processing complete!" appears
+            if (event.data.includes("Processing complete!")) {
+                eventSource.close();
+            }
+        };
+    </script>
+</body>
+</html>
