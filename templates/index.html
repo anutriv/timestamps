@@ -15,20 +15,39 @@
         <input type="file" id="mp4_file" name="mp4_file" required onchange="checkFiles()"><br>
 
         <p id="progress"></p> <!-- 🚀 This starts blank until upload begins -->
+        <p id="errorMessage" style="color: red;"></p> <!-- 🚀 Error messages will be displayed here -->
 
         <button onclick="uploadFiles(event)" id="submitBtn" disabled>Run Processing</button>
     </form>
 
     <script>
         function checkFiles() {
-            let assFile = document.getElementById("ass_file").files.length > 0;
-            let mp4File = document.getElementById("mp4_file").files.length > 0;
+            let assFile = document.getElementById("ass_file").files[0];
+            let mp4File = document.getElementById("mp4_file").files[0];
+            let errorMessage = document.getElementById("errorMessage");
+            let submitBtn = document.getElementById("submitBtn");
 
-            if (assFile && mp4File) {
-                document.getElementById("progress").innerHTML = "Files selected, ready to upload!";
-            } else {
-                document.getElementById("progress").innerHTML = "";  // ✅ This prevents premature messages
+            errorMessage.innerHTML = ""; // Clear any previous errors
+            submitBtn.disabled = true; // Disable button until validation passes
+
+            if (!assFile || !mp4File) {
+                errorMessage.innerHTML = "⚠️ Please select both files.";
+                return;
             }
+
+            // ✅ Ensure correct file types are selected
+            if (!assFile.name.endsWith(".ass")) {
+                errorMessage.innerHTML = "❌ Please upload a valid .ASS file.";
+                return;
+            }
+            if (!mp4File.name.endsWith(".mp4")) {
+                errorMessage.innerHTML = "❌ Please upload a valid .MP4 file.";
+                return;
+            }
+
+            // ✅ Enable processing button only when valid files are selected
+            errorMessage.innerHTML = "";  
+            submitBtn.disabled = false;
         }
 
         function uploadFiles(event) {
@@ -38,6 +57,7 @@
             let xhr = new XMLHttpRequest();
 
             xhr.open("POST", "/", true);
+            document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
@@ -49,7 +69,6 @@
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                    document.getElementById("submitBtn").disabled = false;
                 } else {
                     document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }

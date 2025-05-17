@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import time
 from flask import Flask, request, render_template, send_file, Response
 
 app = Flask(__name__)
@@ -26,11 +27,26 @@ def index():
         if not ass_file or not mp4_file:
             return "Error: Missing uploaded files!", 400
 
-        # Save uploaded files
-        ass_file.save(os.path.join(PY_DIR, "input.ass"))
-        mp4_file.save(os.path.join(PY_DIR, "input.mp4"))
+        # Define file paths
+        ass_path = os.path.join(PY_DIR, "input.ass")
+        mp4_path = os.path.join(PY_DIR, "input.mp4")
 
-        # ✅ Redirect to processing page **only after form submission**
+        # Save uploaded files
+        ass_file.save(ass_path)
+        mp4_file.save(mp4_path)
+
+        # ✅ Wait until file size stops changing (ensuring full upload)
+        prev_size = 0
+        while True:
+            time.sleep(2)  # Small delay to check file size changes
+            current_size = os.path.getsize(mp4_path)
+            if current_size == prev_size:
+                break
+            prev_size = current_size
+
+        print("✅ Files are fully uploaded. Proceeding with processing.")
+
+        # Redirect to processing page **only after full upload confirmation**
         return render_template("processing.html")
 
     return render_template("index.html")  # ✅ Ensures GET requests show the upload form first
