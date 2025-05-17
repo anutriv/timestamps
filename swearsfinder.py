@@ -55,7 +55,11 @@ def extract_audio(input_audio, output_audio, start_time, end_time):
 def extract_audio_chunks(input_mp3, unclean_txt, output_dir):
     """Extracts individual audio chunks based on timestamps in unclean.txt using FFmpeg."""
     os.makedirs(output_dir, exist_ok=True)
-    
+
+    # ✅ Check if `unclean.txt` exists before proceeding
+    if not os.path.exists(unclean_txt):
+        raise FileNotFoundError(f"❌ Error: '{unclean_txt}' not found. Ensure it is generated before processing.")
+
     with open(unclean_txt, 'r', encoding='utf-8') as file:
         lines = file.readlines()
 
@@ -72,6 +76,7 @@ def extract_audio_chunks(input_mp3, unclean_txt, output_dir):
             audio_chunks.append((chunk_path, text.strip(), start_seconds, end_seconds))
 
     return audio_chunks
+
 
 # Use dynamic paths
 audio_chunks = extract_audio_chunks(
