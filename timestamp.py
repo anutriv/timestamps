@@ -30,10 +30,10 @@ def index():
         ass_file.save(os.path.join(PY_DIR, "input.ass"))
         mp4_file.save(os.path.join(PY_DIR, "input.mp4"))
 
-        # ✅ Redirect to processing page instead of running script immediately
-        return render_template("processing.html")  
+        # ✅ Redirect to processing page **only after form submission**
+        return render_template("processing.html")
 
-    return render_template("index.html")  # Render the upload form
+    return render_template("index.html")  # ✅ Ensures GET requests show the upload form first
 
 @app.route("/process")
 def process():
