@@ -19,9 +19,10 @@ required_files = ["input.mp4", "input.ass"]
 missing_files = [file for file in required_files if not os.path.exists(os.path.join(BASE_DIR, file))]
 
 if missing_files:
-    print(f"❌ Error: Missing required files: {', '.join(missing_files)}")
-else:
-    print("✅ All required files are present.")
+    print(f"❌ Error: Missing required files: {', '.join(missing_files)}. Please upload them before running the script.")
+    sys.exit(1)  # 🚀 Stops script execution if files are missing
+
+print("✅ All required files are present. Proceeding with execution...")
 
 # Install missing packages
 REQUIRED_PACKAGES = ["nltk"]
