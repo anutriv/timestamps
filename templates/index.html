@@ -18,11 +18,12 @@
         <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
 
         <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
-        <button onclick="runProcessing(event)" id="processBtn" disabled>Get Timestamp</button>
+        <button onclick="runProcessing(event)" id="processBtn" disabled style="display:none;">Start Processing</button>
+        <button onclick="downloadFiles(event)" id="downloadBtn" disabled style="display:none;">Download All Files</button>
     </form>
 
     <script>
-        const RENDER_URL = "https://timestamps-5nub.onrender.com/";  // ✅ Replace with actual Render service URL
+        const RENDER_URL = "https://timestamps-5nub.onrender.com";  // ✅ Update with your actual Render URL
 
         function validateFiles() {
             let assFile = document.getElementById("ass_file").files[0];
@@ -30,15 +31,14 @@
             let errorMessage = document.getElementById("errorMessage");
             let uploadBtn = document.getElementById("uploadBtn");
 
-            errorMessage.innerHTML = ""; // Clear previous errors
-            uploadBtn.disabled = true; // Disable button until validation passes
+            errorMessage.innerHTML = "";
+            uploadBtn.disabled = true; 
 
             if (!assFile || !mp4File) {
                 errorMessage.innerHTML = "⚠️ Please select both files.";
                 return;
             }
 
-            // ✅ Validate file types
             if (!assFile.name.endsWith(".ass")) {
                 errorMessage.innerHTML = "❌ Invalid .ASS file selected.";
                 return;
@@ -48,7 +48,6 @@
                 return;
             }
 
-            // ✅ Enable upload button once validation is passed
             errorMessage.innerHTML = "";  
             uploadBtn.disabled = false;
         }
@@ -59,7 +58,7 @@
             let formData = new FormData(document.getElementById("uploadForm"));
             let xhr = new XMLHttpRequest();
 
-            xhr.open("POST", `${RENDER_URL}/upload`, true);  // ✅ Updated to use Render service URL
+            xhr.open("POST", `${RENDER_URL}/upload`, true);
             document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
             xhr.upload.onprogress = function(event) {
@@ -72,9 +71,8 @@
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                    
-                    // ✅ Enable processing button after upload
                     document.getElementById("processBtn").disabled = false;
+                    document.getElementById("processBtn").style.display = "inline";  
                 } else {
                     document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }
@@ -91,24 +89,14 @@
             event.preventDefault();
 
             let xhr = new XMLHttpRequest();
-            xhr.open("GET", `${RENDER_URL}/process`, true);  // ✅ Updated to use Render service URL
+            xhr.open("GET", `${RENDER_URL}/process`, true);
             document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
             xhr.onload = function() {
                 if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Processing complete! Downloading files...";
-
-                    // ✅ Start downloading all output files
-                    let outputFiles = ["unclean.txt", "clean.txt", "final.srt", "output.ass", "timestamps.txt"];
-                    outputFiles.forEach(file => {
-                        let link = document.createElement("a");
-                        link.href = `${RENDER_URL}/download/${file}`;  // ✅ Updated to use Render service URL
-                        link.download = file;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                    });
-
+                    document.getElementById("progress").innerHTML = "✅ Processing complete! Files ready for download.";
+                    document.getElementById("downloadBtn").disabled = false;
+                    document.getElementById("downloadBtn").style.display = "inline";  
                 } else {
                     document.getElementById("progress").innerHTML = "❌ Error in processing!";
                 }
@@ -119,6 +107,22 @@
             };
 
             xhr.send();
+        }
+
+        function downloadFiles(event) {
+            event.preventDefault();
+
+            let outputFiles = ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"];
+            outputFiles.forEach(file => {
+                let link = document.createElement("a");
+                link.href = `${RENDER_URL}/download/${file}`;
+                link.download = file;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
         }
     </script>
 </body>
