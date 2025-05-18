@@ -99,21 +99,24 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
     with open(unclean_file, 'w', encoding='utf-8') as file:
         file.writelines(original_affected_lines)
 
-### Background Processing (Runs Asynchronously & Fixes FileNotFoundError) ###
+### Background Processing (Creates & Cleans `processed/audio_chunks/` and Deletes MP3) ###
 def async_process_files():
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
     ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
     mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
     convert_mp4_to_mp3(mp4_path, mp3_path)
+
+    # ✅ Ensure audio_chunks folder exists
+    audio_chunks_path = os.path.join(PROCESSED_FOLDER, "audio_chunks")
+    os.makedirs(audio_chunks_path, exist_ok=True)
+
     censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
 
-    # ✅ Only delete if the folder exists
-    audio_chunks_path = os.path.join(PROCESSED_FOLDER, "audio_chunks")
+    # ✅ Clean up extracted audio chunks and MP3 file after processing
     if os.path.exists(audio_chunks_path):
         shutil.rmtree(audio_chunks_path)
 
-    # ✅ Prevent error if mp3 file does not exist
     if os.path.exists(mp3_path):
         os.remove(mp3_path)
 
