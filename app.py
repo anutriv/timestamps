@@ -67,7 +67,7 @@ def upload_files():
 
     return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
 
-### Background Processing to Prevent Timeout ###
+### Background Processing to Prevent Timeout (Fix 3) ###
 def async_process_files():
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
     ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
@@ -84,11 +84,11 @@ def async_process_files():
     shutil.rmtree("processed/audio_chunks")
     os.remove(mp3_path)
 
-### Process Route (Runs Asynchronously) ###
+### Process Route (Runs Asynchronously) (Fix 3) ###
 @app.route('/process', methods=['GET'])
 def process_files():
     threading.Thread(target=async_process_files).start()
-    return jsonify({"message": "Processing started, check back later"}), 202
+    return jsonify({"message": "Processing started"}), 202
 
 ### Download Processed Files ###
 @app.route('/download/<filename>', methods=['GET'])
