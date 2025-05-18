@@ -85,8 +85,41 @@
             uploadBtn.disabled = false;
         }
 
+        function uploadFiles(event) {
+            event.preventDefault(); // ✅ Prevents page refresh
+
+            let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
+
+            xhr.open("POST", `${RENDER_URL}/upload`, true);
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
+
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("processBtn").disabled = false;
+                    document.getElementById("processBtn").style.display = "inline";
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
+
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
+
+            xhr.send(formData);
+        }
+
         function runProcessing(event) {
-            event.preventDefault(); // ✅ Prevent page refresh
+            event.preventDefault(); // ✅ Prevents page refresh
 
             document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
@@ -104,6 +137,22 @@
                 .catch(() => {
                     document.getElementById("progress").innerHTML = "❌ Network Error!";
                 });
+        }
+
+        function downloadFiles(event) {
+            event.preventDefault();
+
+            let outputFiles = ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"];
+            outputFiles.forEach(file => {
+                let link = document.createElement("a");
+                link.href = `${RENDER_URL}/download/${file}`;
+                link.download = file;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+
+            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
         }
     </script>
 </body>
