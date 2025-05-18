@@ -36,9 +36,12 @@ lemmatizer = WordNetLemmatizer()
 
 EXCEPTIONS = {"as", "pass", "bass"}
 
-### Convert MP4 to MP3 ###
+### Convert MP4 to MP3 with FFmpeg (Fix FFmpeg Stalling Issue) ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
-    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
+    subprocess.run(
+        ["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3],
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
 
 ### Load Swear Words ###
 def load_swears(file_path):
@@ -120,7 +123,7 @@ def async_process_files():
     if os.path.exists(mp3_path):
         os.remove(mp3_path)
 
-### Process Route ###
+### Process Route (Runs in Background Thread to Prevent Blocking) ###
 @app.route('/process', methods=['GET'])
 def process_files():
     threading.Thread(target=async_process_files).start()
