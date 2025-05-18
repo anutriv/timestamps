@@ -14,7 +14,7 @@
         <label for="mp4_file">Upload MP4 File:</label>
         <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
 
-        <p id="progress"></p> <!-- Shows Upload Progress -->
+        <p id="progress">⏳ Waiting for upload...</p> <!-- Shows Upload Progress -->
         <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
 
         <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
@@ -50,46 +50,32 @@
         function uploadFiles(event) {
             event.preventDefault();
             let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
 
-            fetch(`${RENDER_URL}/upload`, { method: "POST", body: formData })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                        document.getElementById("processBtn").style.display = "inline";
-                    } else {
-                        document.getElementById("progress").innerHTML = "❌ Upload failed!";
-                    }
-                });
-        }
+            xhr.open("POST", `${RENDER_URL}/upload`, true);
+            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 
-        function runProcessing(event) {
-            event.preventDefault();
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
 
-            fetch(`${RENDER_URL}/process`, { method: "GET" })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message.includes("started")) {
-                        document.getElementById("progress").innerHTML = "✅ Processing started! Please wait...";
-                        document.getElementById("downloadBtn").style.display = "inline";  
-                    } else {
-                        document.getElementById("progress").innerHTML = "❌ Processing error!";
-                    }
-                });
-        }
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("processBtn").style.display = "inline";
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
 
-        function downloadFiles(event) {
-            event.preventDefault();
-            ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"].forEach(file => {
-                let link = document.createElement("a");
-                link.href = `${RENDER_URL}/download/${file}`;
-                link.download = file;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
 
-            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
+            xhr.send(formData);
         }
     </script>
 </body>
