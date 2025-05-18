@@ -3,27 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <title>Upload & Process Files</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            max-width: 600px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            margin: auto;
+            margin-top: 50px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+        }
+
+        #progress {
+            font-weight: bold;
+            color: #333;
+        }
+
+        #errorMessage {
+            color: red;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <h2>Upload Files for Processing</h2>
-    
-    <form id="uploadForm" enctype="multipart/form-data">
-        <label for="ass_file">Upload ASS File:</label>
-        <input type="file" id="ass_file" name="ass_file" required onchange="validateFiles()"><br>
+    <div class="container">
+        <h2>Upload & Process Files</h2>
+        
+        <form id="uploadForm" enctype="multipart/form-data">
+            <label for="ass_file">Upload ASS File:</label>
+            <input type="file" id="ass_file" name="ass_file" required onchange="validateFiles()"><br>
 
-        <label for="mp4_file">Upload MP4 File:</label>
-        <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
+            <label for="mp4_file">Upload MP4 File:</label>
+            <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
 
-        <p id="progress">⏳ Waiting for upload...</p> <!-- Shows Upload Progress -->
-        <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
+            <p id="progress">⏳ Waiting for upload...</p>
+            <p id="errorMessage"></p>
 
-        <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
-        <button onclick="runProcessing(event)" id="processBtn" disabled style="display:none;">Start Processing</button>
-        <button onclick="downloadFiles(event)" id="downloadBtn" disabled style="display:none;">Download All Files</button>
-    </form>
+            <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
+            <button onclick="runProcessing(event)" id="processBtn" disabled style="display:none;">Start Processing</button>
+            <button onclick="downloadFiles(event)" id="downloadBtn" disabled style="display:none;">Download All Files</button>
+        </form>
+    </div>
 
     <script>
-        const RENDER_URL = "https://timestamps-5nub.onrender.com";  // ✅ Fixed trailing slash issue
+        const RENDER_URL = "https://timestamps-5nub.onrender.com";  
 
         function validateFiles() {
             let assFile = document.getElementById("ass_file").files[0];
@@ -32,15 +75,10 @@
             let uploadBtn = document.getElementById("uploadBtn");
 
             errorMessage.innerHTML = "";
-            uploadBtn.disabled = true; 
+            uploadBtn.disabled = true;
 
-            if (!assFile || !mp4File) {
-                errorMessage.innerHTML = "⚠️ Please select both files.";
-                return;
-            }
-
-            if (!assFile.name.endsWith(".ass") || !mp4File.name.endsWith(".mp4")) {
-                errorMessage.innerHTML = "❌ Invalid file format!";
+            if (!assFile || !mp4File || !assFile.name.endsWith(".ass") || !mp4File.name.endsWith(".mp4")) {
+                errorMessage.innerHTML = "❌ Select valid .ASS and .MP4 files.";
                 return;
             }
 
@@ -53,7 +91,6 @@
             let xhr = new XMLHttpRequest();
 
             xhr.open("POST", `${RENDER_URL}/upload`, true);
-            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
 
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
@@ -65,14 +102,9 @@
             xhr.onload = function() {
                 if (xhr.status === 200) {
                     document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("processBtn").disabled = false;
                     document.getElementById("processBtn").style.display = "inline";
-                } else {
-                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }
-            };
-
-            xhr.onerror = function() {
-                document.getElementById("progress").innerHTML = "❌ Network Error!";
             };
 
             xhr.send(formData);
