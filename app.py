@@ -38,10 +38,16 @@ EXCEPTIONS = {"as", "pass", "bass"}
 
 ### Convert MP4 to MP3 with FFmpeg (Fix FFmpeg Stalling Issue) ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
-    subprocess.run(
-        ["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3],
-        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-    )
+    print(f"🔹 Running FFmpeg on {input_mp4}...")
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        print(f"✅ FFmpeg completed: {result.returncode}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ FFmpeg failed: {e.stderr.decode()}")
+        raise
 
 ### Load Swear Words ###
 def load_swears(file_path):
@@ -104,29 +110,39 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
 
 ### Background Processing (Creates & Cleans `processed/audio_chunks/` and Deletes MP3) ###
 def async_process_files():
-    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
-    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+    try:
+        print("🔹 Starting async processing...")
+        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+        mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-    convert_mp4_to_mp3(mp4_path, mp3_path)
+        convert_mp4_to_mp3(mp4_path, mp3_path)
 
-    # ✅ Ensure audio_chunks folder exists
-    audio_chunks_path = os.path.join(PROCESSED_FOLDER, "audio_chunks")
-    os.makedirs(audio_chunks_path, exist_ok=True)
+        audio_chunks_path = os.path.join(PROCESSED_FOLDER, "audio_chunks")
+        os.makedirs(audio_chunks_path, exist_ok=True)
 
-    censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
+        censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
 
-    # ✅ Clean up extracted audio chunks and MP3 file after processing
-    if os.path.exists(audio_chunks_path):
-        shutil.rmtree(audio_chunks_path)
+        print("✅ Processing complete! Cleaning up...")
 
-    if os.path.exists(mp3_path):
-        os.remove(mp3_path)
+        if os.path.exists(audio_chunks_path):
+            shutil.rmtree(audio_chunks_path)
+
+        if os.path.exists(mp3_path):
+            os.remove(mp3_path)
+
+        print("✅ Cleanup done!")
+
+    except Exception as e:
+        print(f"❌ Processing failed: {str(e)}")
 
 ### Process Route (Runs in Background Thread to Prevent Blocking) ###
 @app.route('/process', methods=['GET'])
 def process_files():
-    threading.Thread(target=async_process_files).start()
+    print("✅ Process request received!")
+    t = threading.Thread(target=async_process_files)
+    t.daemon = True  # ✅ Ensures Flask doesn't block waiting for the thread
+    t.start()
     return jsonify({"message": "Processing started"}), 202
 
 ### Download Processed Files ###
