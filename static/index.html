@@ -3,50 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Upload & Process Files</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f4f4;
-        }
-
-        .container {
-            max-width: 600px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-            margin: auto;
-            margin-top: 50px;
-        }
-
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            background-color: #28a745;
-            color: white;
-        }
-
-        button:disabled {
-            background-color: #ccc;
-        }
-
-        #progress {
-            font-weight: bold;
-            color: #333;
-        }
-
-        #errorMessage {
-            color: red;
-            font-weight: bold;
-        }
-    </style>
 </head>
 <body>
-    <div class="container">
+    <div>
         <h2>Upload & Process Files</h2>
         
         <form id="uploadForm" enctype="multipart/form-data">
@@ -66,34 +25,23 @@
     </div>
 
     <script>
-        const RENDER_URL = "https://timestamps-5nub.onrender.com";  
+        const RENDER_URL = "https://timestamps-5nub.onrender.com";
 
         function validateFiles() {
             let assFile = document.getElementById("ass_file").files[0];
             let mp4File = document.getElementById("mp4_file").files[0];
-            let errorMessage = document.getElementById("errorMessage");
             let uploadBtn = document.getElementById("uploadBtn");
 
-            errorMessage.innerHTML = "";
-            uploadBtn.disabled = true;
-
-            if (!assFile || !mp4File || !assFile.name.endsWith(".ass") || !mp4File.name.endsWith(".mp4")) {
-                errorMessage.innerHTML = "❌ Select valid .ASS and .MP4 files.";
-                return;
-            }
-
-            uploadBtn.disabled = false;
+            uploadBtn.disabled = !assFile || !mp4File;
         }
 
         function uploadFiles(event) {
-            event.preventDefault(); // ✅ Prevents page refresh
+            event.preventDefault();
 
             let formData = new FormData(document.getElementById("uploadForm"));
             let xhr = new XMLHttpRequest();
 
             xhr.open("POST", `${RENDER_URL}/upload`, true);
-            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
-
             xhr.upload.onprogress = function(event) {
                 if (event.lengthComputable) {
                     let percent = (event.loaded / event.total) * 100;
@@ -106,53 +54,10 @@
                     document.getElementById("progress").innerHTML = "✅ Upload Complete!";
                     document.getElementById("processBtn").disabled = false;
                     document.getElementById("processBtn").style.display = "inline";
-                } else {
-                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
                 }
             };
 
-            xhr.onerror = function() {
-                document.getElementById("progress").innerHTML = "❌ Network Error!";
-            };
-
             xhr.send(formData);
-        }
-
-        function runProcessing(event) {
-            event.preventDefault(); // ✅ Prevents page refresh
-
-            document.getElementById("progress").innerHTML = "⏳ Processing started...";
-
-            fetch(`${RENDER_URL}/process`, { method: "GET" })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message.includes("Processing started")) {
-                        document.getElementById("progress").innerHTML = "✅ Processing started! Please wait...";
-                        document.getElementById("downloadBtn").disabled = false;
-                        document.getElementById("downloadBtn").style.display = "inline";  
-                    } else {
-                        document.getElementById("progress").innerHTML = "❌ Error in processing!";
-                    }
-                })
-                .catch(() => {
-                    document.getElementById("progress").innerHTML = "❌ Network Error!";
-                });
-        }
-
-        function downloadFiles(event) {
-            event.preventDefault();
-
-            let outputFiles = ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"];
-            outputFiles.forEach(file => {
-                let link = document.createElement("a");
-                link.href = `${RENDER_URL}/download/${file}`;
-                link.download = file;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
-
-            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
         }
     </script>
 </body>
