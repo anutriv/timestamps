@@ -15,6 +15,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = "uploads"
 PROCESSED_FOLDER = "processed"
+STATIC_FOLDER = "static"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
@@ -43,6 +44,11 @@ def convert_mp4_to_mp3(input_mp4, output_mp3):
 def load_swears(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
+
+### Serve Index Page ###
+@app.route('/')
+def serve_index():
+    return send_file(os.path.join(STATIC_FOLDER, "index.html"))
 
 ### File Upload Route ###
 @app.route('/upload', methods=['POST'])
@@ -88,9 +94,9 @@ def process_files():
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
     file_path = os.path.join(PROCESSED_FOLDER, filename)
-    if os.path.exists(file_path):
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
         return send_file(file_path, as_attachment=True)
-    return jsonify({"error": "File not found"}), 404
+    return jsonify({"error": "File not found or empty"}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
