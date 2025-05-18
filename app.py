@@ -67,7 +67,39 @@ def upload_files():
 
     return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
 
-### Background Processing to Prevent Timeout (Fix 3) ###
+### Censor Subtitles ###
+def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
+    swears = load_swears(swears_file)
+    with open(input_ass, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
+
+    censored_lines, affected_lines, original_affected_lines = [], [], []
+    for line in lines:
+        original_line = line  
+        modified = False
+
+        words = re.findall(r'\b\w+\b', line)
+        for word in words:
+            lemma_word = lemmatizer.lemmatize(word.lower(), pos='v')
+            lemma_word_noun = lemmatizer.lemmatize(word.lower(), pos='n')
+
+            if (lemma_word in swears or lemma_word_noun in swears) and word.lower() not in EXCEPTIONS:
+                line = line.replace(word, word[0] + '.' * (len(word) - 1))
+                modified = True
+
+        censored_lines.append(line)
+        if modified and line.startswith("Dialogue:"):
+            affected_lines.append(line)
+            original_affected_lines.append(original_line)
+
+    with open(output_ass, 'w', encoding='utf-8') as file:
+        file.writelines(censored_lines)
+    with open(clean_file, 'w', encoding='utf-8') as file:
+        file.writelines(affected_lines)
+    with open(unclean_file, 'w', encoding='utf-8') as file:
+        file.writelines(original_affected_lines)
+
+### Background Processing (Runs Asynchronously) ###
 def async_process_files():
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
     ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
@@ -76,15 +108,10 @@ def async_process_files():
     convert_mp4_to_mp3(mp4_path, mp3_path)
     censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
 
-    audio_chunks = extract_audio_chunks(mp3_path, "processed/unclean.txt", "processed/audio_chunks")
-    model = whisper.load_model("medium")
-    transcribe_audio_chunks(audio_chunks, model)
-    extract_matching_timestamps("processed/final.srt", "swears.txt", "processed/timestamps.txt")
-
     shutil.rmtree("processed/audio_chunks")
     os.remove(mp3_path)
 
-### Process Route (Runs Asynchronously) (Fix 3) ###
+### Process Route ###
 @app.route('/process', methods=['GET'])
 def process_files():
     threading.Thread(target=async_process_files).start()
