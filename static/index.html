@@ -85,29 +85,25 @@
             uploadBtn.disabled = false;
         }
 
-        function uploadFiles(event) {
-            event.preventDefault();
-            let formData = new FormData(document.getElementById("uploadForm"));
-            let xhr = new XMLHttpRequest();
+        function runProcessing(event) {
+            event.preventDefault(); // ✅ Prevent page refresh
 
-            xhr.open("POST", `${RENDER_URL}/upload`, true);
+            document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
-            xhr.upload.onprogress = function(event) {
-                if (event.lengthComputable) {
-                    let percent = (event.loaded / event.total) * 100;
-                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
-                }
-            };
-
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                    document.getElementById("processBtn").disabled = false;
-                    document.getElementById("processBtn").style.display = "inline";
-                }
-            };
-
-            xhr.send(formData);
+            fetch(`${RENDER_URL}/process`, { method: "GET" })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message.includes("Processing started")) {
+                        document.getElementById("progress").innerHTML = "✅ Processing started! Please wait...";
+                        document.getElementById("downloadBtn").disabled = false;
+                        document.getElementById("downloadBtn").style.display = "inline";  
+                    } else {
+                        document.getElementById("progress").innerHTML = "❌ Error in processing!";
+                    }
+                })
+                .catch(() => {
+                    document.getElementById("progress").innerHTML = "❌ Network Error!";
+                });
         }
     </script>
 </body>
