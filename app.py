@@ -6,7 +6,7 @@ import shutil
 import nltk
 import threading
 import time
-import wishper
+import whisper
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 
