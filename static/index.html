@@ -14,6 +14,10 @@
             font-family: Arial, sans-serif;
         }
 
+        h2 {
+            margin-top: 20px;
+        }
+
         form {
             display: flex;
             flex-direction: column;
@@ -22,6 +26,7 @@
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            width: 350px;
         }
 
         button {
@@ -33,6 +38,7 @@
             color: white;
             border: none;
             border-radius: 5px;
+            width: 200px;
         }
 
         button:disabled {
@@ -43,6 +49,7 @@
         p {
             font-size: 14px;
             font-weight: bold;
+            text-align: center;
         }
     </style>
 </head>
@@ -167,7 +174,7 @@
             };
 
             checkXhr.onerror = function() {
-                document.getElementById("progress").innerHTML = "❌ Error checking file status!";
+                document.getElementById("progress").innerHTML = "❌ Error checking file status! Ensure server is running.";
             };
 
             checkXhr.send();
