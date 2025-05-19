@@ -9,7 +9,7 @@ import threading
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')  # ✅ Ensure Flask correctly serves the static folder
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 UPLOAD_FOLDER = "uploads"
@@ -42,10 +42,27 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
 
-### Load Swear Words ###
-def load_swears(file_path):
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
+### Serve Index Page Correctly ###
+@app.route('/')
+def serve_index():
+    return send_file(os.path.join(STATIC_FOLDER, "index.html"))
+
+### File Upload Route ###
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    if 'ass_file' not in request.files or 'mp4_file' not in request.files:
+        return jsonify({"error": "Missing ASS or MP4 file"}), 400
+
+    ass_file = request.files['ass_file']
+    mp4_file = request.files['mp4_file']
+
+    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+
+    ass_file.save(ass_path)
+    mp4_file.save(mp4_path)
+
+    return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
 
 ### Censor Subtitles ###
 def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
@@ -79,7 +96,7 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
     with open(unclean_file, 'w', encoding='utf-8') as file:
         file.writelines(original_affected_lines)
 
-### Whisper Transcription for Timestamp & SRT ###
+### Whisper Transcription ###
 def process_audio_for_timestamps(mp3_path):
     whisper_model = whisper.load_model("small")
     result = whisper_model.transcribe(mp3_path)
@@ -95,7 +112,7 @@ def process_audio_for_timestamps(mp3_path):
         for i, segment in enumerate(result["segments"]):
             f.write(f"{i+1}\n{segment['start']} --> {segment['end']}\n{segment['text']}\n\n")
 
-### Background Processing ###
+### Processing Function ###
 def async_process_files():
     global processing_status
     try:
@@ -105,14 +122,11 @@ def async_process_files():
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
         convert_mp4_to_mp3(mp4_path, mp3_path)
-
         censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
-
-        process_audio_for_timestamps(mp3_path)  # ✅ Corrected timestamp and SRT generation
+        process_audio_for_timestamps(mp3_path)
 
         os.remove(mp3_path)  # ✅ Cleanup MP3 after processing
-
-        processing_status["completed"] = True  # ✅ Update status after processing completes
+        processing_status["completed"] = True
 
     except Exception as e:
         processing_status["completed"] = False
@@ -124,12 +138,12 @@ def process_files():
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
 
-### Status Route ###
+### Status Route Fix ###
 @app.route('/status', methods=['GET'])
 def get_status():
     return jsonify({"status": "completed" if processing_status["completed"] else "in_progress"})
 
-### Download Processed Files ###
+### Download Route Fix ###
 @app.route('/download/<filename>', methods=['GET'])
 def download_file(filename):
     file_path = os.path.join(PROCESSED_FOLDER, filename)
