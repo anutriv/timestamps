@@ -87,7 +87,7 @@ def upload_files():
 
     return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
 
-### Whisper Transcription Runs Externally (Optimized for Low Memory Usage) ###
+### Whisper Transcription Runs Externally (Optimized with `--fp16`) ###
 def process_audio_for_timestamps(mp3_path):
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
@@ -101,8 +101,8 @@ def process_audio_for_timestamps(mp3_path):
 
                 print(f"🔹 Processing {segment_file} with Whisper...")
 
-                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--compute_type", "float16"],
-                                        capture_output=True, text=True)
+                # ✅ Whisper now correctly runs with `--fp16`
+                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--fp16"], capture_output=True, text=True)
 
                 if result.returncode == 0:
                     transcribed_text = result.stdout.strip()
@@ -158,4 +158,4 @@ def download_file(filename):
     return jsonify({"error": "File not found or empty"}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)))
