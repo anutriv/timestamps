@@ -1,159 +1,49 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Upload & Process Files</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #f4f4f4;
-        }
+<script>
+    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
 
-        .container {
-            max-width: 600px;
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
-            margin: auto;
-            margin-top: 50px;
-        }
+    function runProcessing(event) {
+        event.preventDefault();
 
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            background-color: #28a745;
-            color: white;
-        }
+        let xhr = new XMLHttpRequest();
+        xhr.open("GET", `${RENDER_URL}/process`, true);
+        document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
-        button:disabled {
-            background-color: #ccc;
-        }
-
-        #progress {
-            font-weight: bold;
-            color: #333;
-        }
-
-        #errorMessage {
-            color: red;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>Upload & Process Files</h2>
-        
-        <form id="uploadForm" enctype="multipart/form-data">
-            <label for="ass_file">Upload ASS File:</label>
-            <input type="file" id="ass_file" name="ass_file" required onchange="validateFiles()"><br>
-
-            <label for="mp4_file">Upload MP4 File:</label>
-            <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
-
-            <p id="progress">⏳ Waiting for upload...</p>
-            <p id="errorMessage"></p>
-
-            <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
-            <button onclick="runProcessing(event)" id="processBtn" disabled style="display:none;">Start Processing</button>
-            <button onclick="downloadFiles(event)" id="downloadBtn" disabled style="display:none;">Download All Files</button>
-        </form>
-    </div>
-
-    <script>
-        const RENDER_URL = "https://timestamps-5nub.onrender.com";  
-
-        function validateFiles() {
-            let assFile = document.getElementById("ass_file").files[0];
-            let mp4File = document.getElementById("mp4_file").files[0];
-            let errorMessage = document.getElementById("errorMessage");
-            let uploadBtn = document.getElementById("uploadBtn");
-
-            errorMessage.innerHTML = "";
-            uploadBtn.disabled = true;
-
-            if (!assFile || !mp4File || !assFile.name.endsWith(".ass") || !mp4File.name.endsWith(".mp4")) {
-                errorMessage.innerHTML = "❌ Select valid .ASS and .MP4 files.";
-                return;
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
+                
+                checkProcessingCompletion(); // ✅ New function to confirm files are ready
+            } else {
+                document.getElementById("progress").innerHTML = "❌ Error in processing!";
             }
+        };
 
-            uploadBtn.disabled = false;
-        }
+        xhr.onerror = function() {
+            document.getElementById("progress").innerHTML = "❌ Network Error!";
+        };
 
-        function uploadFiles(event) {
-            event.preventDefault(); // ✅ Prevents page refresh
+        xhr.send();
+    }
 
-            let formData = new FormData(document.getElementById("uploadForm"));
-            let xhr = new XMLHttpRequest();
+    function checkProcessingCompletion() {
+        let checkXhr = new XMLHttpRequest();
+        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
 
-            xhr.open("POST", `${RENDER_URL}/upload`, true);
-            xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+        checkXhr.onload = function() {
+            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
+                document.getElementById("progress").innerHTML = "✅ Files are ready!";
+                document.getElementById("downloadBtn").disabled = false;
+                document.getElementById("downloadBtn").style.display = "inline";  
+            } else {
+                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
+                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
+            }
+        };
 
-            xhr.upload.onprogress = function(event) {
-                if (event.lengthComputable) {
-                    let percent = (event.loaded / event.total) * 100;
-                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
-                }
-            };
+        checkXhr.onerror = function() {
+            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
+        };
 
-            xhr.onload = function() {
-                if (xhr.status === 200) {
-                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
-                    document.getElementById("processBtn").disabled = false;
-                    document.getElementById("processBtn").style.display = "inline";
-                } else {
-                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
-                }
-            };
-
-            xhr.onerror = function() {
-                document.getElementById("progress").innerHTML = "❌ Network Error!";
-            };
-
-            xhr.send(formData);
-        }
-
-        function runProcessing(event) {
-            event.preventDefault(); // ✅ Prevents page refresh
-
-            document.getElementById("progress").innerHTML = "⏳ Processing started...";
-
-            fetch(`${RENDER_URL}/process`, { method: "GET" })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.message.includes("Processing started")) {
-                        document.getElementById("progress").innerHTML = "✅ Processing started! Please wait...";
-                        document.getElementById("downloadBtn").disabled = false;
-                        document.getElementById("downloadBtn").style.display = "inline";  
-                    } else {
-                        document.getElementById("progress").innerHTML = "❌ Error in processing!";
-                    }
-                })
-                .catch(() => {
-                    document.getElementById("progress").innerHTML = "❌ Network Error!";
-                });
-        }
-
-        function downloadFiles(event) {
-            event.preventDefault();
-
-            let outputFiles = ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"];
-            outputFiles.forEach(file => {
-                let link = document.createElement("a");
-                link.href = `${RENDER_URL}/download/${file}`;
-                link.download = file;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
-
-            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
-        }
-    </script>
-</body>
-</html>
+        checkXhr.send();
+    }
+</script>
