@@ -8,3 +8,4 @@ flask
 pydub
 openai-whisper
 torch
+torchvision
