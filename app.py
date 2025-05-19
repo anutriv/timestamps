@@ -42,6 +42,12 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
 
+### Segment MP3 to Reduce Memory Usage ###
+def segment_audio(mp3_path, segment_folder):
+    os.makedirs(segment_folder, exist_ok=True)
+    subprocess.run(["ffmpeg", "-i", mp3_path, "-f", "segment", "-segment_time", "30",
+                    "-c", "copy", f"{segment_folder}/segment_%03d.mp3"], check=True)
+
 ### Serve Index Page Correctly ###
 @app.route('/')
 def serve_index():
@@ -52,7 +58,7 @@ def load_swears(file_path):
     """Loads swear words from a file, removing exceptions."""
     if not os.path.exists(file_path):
         print(f"⚠️ Warning: Swears file '{file_path}' not found!")
-        return set()  # Return an empty set if the file is missing
+        return set()
 
     with open(file_path, 'r', encoding='utf-8') as file:
         return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
@@ -106,21 +112,25 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
     with open(unclean_file, 'w', encoding='utf-8') as file:
         file.writelines(original_affected_lines)
 
-### Whisper Transcription ###
+### Whisper Transcription (Optimized for Memory) ###
 def process_audio_for_timestamps(mp3_path):
-    whisper_model = whisper.Whisper.load_model("small")
-    result = whisper_model.transcribe(mp3_path)
+    whisper_model = whisper.load_model("tiny")  # ✅ Use tiny model to reduce memory usage
+    segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
+    segment_audio(mp3_path, segment_folder)  # ✅ Segment audio before transcription
 
     timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
     final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
 
-    with open(timestamps_file, "w", encoding="utf-8") as f:
-        for segment in result["segments"]:
-            f.write(f"{segment['start']} --> {segment['end']} {segment['text']}\n")
+    with open(timestamps_file, "w", encoding="utf-8") as f, open(final_srt_file, "w", encoding="utf-8") as srt_f:
+        for segment_file in sorted(os.listdir(segment_folder)):
+            segment_path = os.path.join(segment_folder, segment_file)
+            result = whisper_model.transcribe(segment_path)
 
-    with open(final_srt_file, "w", encoding="utf-8") as f:
-        for i, segment in enumerate(result["segments"]):
-            f.write(f"{i+1}\n{segment['start']} --> {segment['end']}\n{segment['text']}\n\n")
+            for i, segment in enumerate(result["segments"]):
+                f.write(f"{segment['start']} --> {segment['end']} {segment['text']}\n")
+                srt_f.write(f"{i+1}\n{segment['start']} --> {segment['end']}\n{segment['text']}\n\n")
+
+    shutil.rmtree(segment_folder)  # ✅ Cleanup temporary segmented audio
 
 ### Processing Function ###
 def async_process_files():
