@@ -36,54 +36,84 @@ install_missing_packages()
 nltk.download('wordnet')
 
 EXCEPTIONS = {"as", "pass", "bass"}
+lemmatizer = nltk.stem.WordNetLemmatizer()
 
 ### Convert MP4 to MP3 ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
 
-### Serve Index Page ###
-@app.route('/')
-def serve_index():
-    index_path = os.path.join(STATIC_FOLDER, "index.html")
-    if os.path.exists(index_path):
-        return send_file(index_path)
-    return jsonify({"error": "index.html not found"}), 404
+### Load Swear Words ###
+def load_swears(file_path):
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
 
-### File Upload Route ###
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    if 'ass_file' not in request.files or 'mp4_file' not in request.files:
-        return jsonify({"error": "Missing ASS or MP4 file"}), 400
+### Censor Subtitles ###
+def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
+    swears = load_swears(swears_file)
+    with open(input_ass, 'r', encoding='utf-8') as file:
+        lines = file.readlines()
 
-    ass_file = request.files['ass_file']
-    mp4_file = request.files['mp4_file']
+    censored_lines, affected_lines, original_affected_lines = [], [], []
+    for line in lines:
+        original_line = line  
+        modified = False
 
-    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
-    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+        words = re.findall(r'\b\w+\b', line)
+        for word in words:
+            lemma_word = lemmatizer.lemmatize(word.lower(), pos='v')
+            lemma_word_noun = lemmatizer.lemmatize(word.lower(), pos='n')
 
-    ass_file.save(ass_path)
-    mp4_file.save(mp4_path)
+            if (lemma_word in swears or lemma_word_noun in swears) and word.lower() not in EXCEPTIONS:
+                line = line.replace(word, word[0] + '.' * (len(word) - 1))
+                modified = True
 
-    return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
+        censored_lines.append(line)
+        if modified and line.startswith("Dialogue:"):
+            affected_lines.append(line)
+            original_affected_lines.append(original_line)
 
-### Processing Function ###
+    with open(output_ass, 'w', encoding='utf-8') as file:
+        file.writelines(censored_lines)
+    with open(clean_file, 'w', encoding='utf-8') as file:
+        file.writelines(affected_lines)
+    with open(unclean_file, 'w', encoding='utf-8') as file:
+        file.writelines(original_affected_lines)
+
+### Whisper Transcription for Timestamp & SRT ###
+def process_audio_for_timestamps(mp3_path):
+    whisper_model = whisper.load_model("small")
+    result = whisper_model.transcribe(mp3_path)
+
+    timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
+    final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
+
+    with open(timestamps_file, "w", encoding="utf-8") as f:
+        for segment in result["segments"]:
+            f.write(f"{segment['start']} --> {segment['end']} {segment['text']}\n")
+
+    with open(final_srt_file, "w", encoding="utf-8") as f:
+        for i, segment in enumerate(result["segments"]):
+            f.write(f"{i+1}\n{segment['start']} --> {segment['end']}\n{segment['text']}\n\n")
+
+### Background Processing ###
 def async_process_files():
     global processing_status
     try:
         processing_status["completed"] = False  # Reset status before processing
         mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
         convert_mp4_to_mp3(mp4_path, mp3_path)
 
-        # Simulating processing (replace this with real logic)
-        with open(os.path.join(PROCESSED_FOLDER, "timestamps.txt"), "w") as f:
-            f.write("Sample Timestamp Data\n")
+        censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
 
-        with open(os.path.join(PROCESSED_FOLDER, "final.srt"), "w") as f:
-            f.write("Sample SRT Data\n")
+        process_audio_for_timestamps(mp3_path)  # ✅ Corrected timestamp and SRT generation
+
+        os.remove(mp3_path)  # ✅ Cleanup MP3 after processing
 
         processing_status["completed"] = True  # ✅ Update status after processing completes
+
     except Exception as e:
         processing_status["completed"] = False
         print(f"❌ Error in processing: {str(e)}")
@@ -94,7 +124,7 @@ def process_files():
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
 
-### Status Route (Allows Front-end to Check Completion) ###
+### Status Route ###
 @app.route('/status', methods=['GET'])
 def get_status():
     return jsonify({"status": "completed" if processing_status["completed"] else "in_progress"})
