@@ -6,8 +6,10 @@ import shutil
 import nltk
 import threading
 import time
+import wishper
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
+
 
 app = Flask(__name__, static_folder='static')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
@@ -98,6 +100,7 @@ def upload_files():
     return jsonify({"success": True, "message": "Files uploaded & MP4 converted to MP3!"}), 200
 
 ### Whisper Transcription Runs Externally ###
+whisper_model = whisper.load_model("tiny")
 def process_audio_for_timestamps(mp3_path):
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
@@ -110,7 +113,7 @@ def process_audio_for_timestamps(mp3_path):
                 segment_path = os.path.join(segment_folder, segment_file)
 
                 print(f"🔹 Processing {segment_file} with Whisper...")
-                result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--model_dir", "whisper_models"], capture_output=True, text=True)
 
                 if result.returncode == 0:
                     transcribed_text = result.stdout.strip()
