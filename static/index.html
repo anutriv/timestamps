@@ -1,294 +1,151 @@
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload & Process Files</title>
+</head>
+<body>
+    <h2>Upload Files for Processing</h2>
+    
+    <form id="uploadForm" enctype="multipart/form-data">
+        <label for="ass_file">Upload ASS File:</label>
+        <input type="file" id="ass_file" name="ass_file" required onchange="validateFiles()"><br>
 
-    function runProcessing(event) {
-        event.preventDefault();
+        <label for="mp4_file">Upload MP4 File:</label>
+        <input type="file" id="mp4_file" name="mp4_file" required onchange="validateFiles()"><br>
 
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
+        <p id="progress"></p> <!-- Shows Upload Progress -->
+        <p id="errorMessage" style="color: red;"></p> <!-- Shows Error Messages -->
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
+        <button onclick="uploadFiles(event)" id="uploadBtn" disabled>Upload</button>
+        <button onclick="runProcessing(event)" id="processBtn" disabled style="display:none;">Start Processing</button>
+        <button onclick="downloadFiles(event)" id="downloadBtn" disabled style="display:none;">Download All Files</button>
+    </form>
+
+    <script>
+        const RENDER_URL = "https://timestamps-5nub.onrender.com";  // ✅ Ensure this URL matches your deployed Render instance
+
+        function validateFiles() {
+            let assFile = document.getElementById("ass_file").files[0];
+            let mp4File = document.getElementById("mp4_file").files[0];
+            let errorMessage = document.getElementById("errorMessage");
+            let uploadBtn = document.getElementById("uploadBtn");
+
+            errorMessage.innerHTML = "";
+            uploadBtn.disabled = true; 
+
+            if (!assFile || !mp4File) {
+                errorMessage.innerHTML = "⚠️ Please select both files.";
+                return;
             }
-        };
 
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
-
-        xhr.send();
-    }
-
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
-
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
+            if (!assFile.name.endsWith(".ass")) {
+                errorMessage.innerHTML = "❌ Invalid .ASS file selected.";
+                return;
             }
-        };
-
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
-
-        checkXhr.send();
-    }
-</script>
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
-
-    function runProcessing(event) {
-        event.preventDefault();
-
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
-
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
+            if (!mp4File.name.endsWith(".mp4")) {
+                errorMessage.innerHTML = "❌ Invalid .MP4 file selected.";
+                return;
             }
-        };
 
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
+            errorMessage.innerHTML = "";  
+            uploadBtn.disabled = false;
+        }
 
-        xhr.send();
-    }
+        function uploadFiles(event) {
+            event.preventDefault();
+            
+            let formData = new FormData(document.getElementById("uploadForm"));
+            let xhr = new XMLHttpRequest();
 
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
+            xhr.open("POST", `${RENDER_URL}/upload`, true);
+            document.getElementById("progress").innerHTML = "⏳ Uploading...";
 
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
-            }
-        };
+            xhr.upload.onprogress = function(event) {
+                if (event.lengthComputable) {
+                    let percent = (event.loaded / event.total) * 100;
+                    document.getElementById("progress").innerHTML = `Uploading... ${percent.toFixed(2)}%`;
+                }
+            };
 
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
+            xhr.onload = function() {
+                if (xhr.status === 200) {
+                    document.getElementById("progress").innerHTML = "✅ Upload Complete!";
+                    document.getElementById("processBtn").disabled = false;
+                    document.getElementById("processBtn").style.display = "inline";  
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Upload failed!";
+                }
+            };
 
-        checkXhr.send();
-    }
-</script>
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
 
-    function runProcessing(event) {
-        event.preventDefault();
+            xhr.send(formData);
+        }
 
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
+        function runProcessing(event) {
+            event.preventDefault();
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
-            }
-        };
+            let xhr = new XMLHttpRequest();
+            xhr.open("GET", `${RENDER_URL}/process`, true);
+            document.getElementById("progress").innerHTML = "⏳ Processing started...";
 
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
+            xhr.onload = function() {
+                if (xhr.status === 202) {
+                    document.getElementById("progress").innerHTML = "✅ Processing started! Waiting for completion...";
+                    checkProcessingCompletion(); // ✅ New function to track processing status
+                } else {
+                    document.getElementById("progress").innerHTML = "❌ Error in starting processing!";
+                }
+            };
 
-        xhr.send();
-    }
+            xhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Network Error!";
+            };
 
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
+            xhr.send();
+        }
 
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
-            }
-        };
+        function checkProcessingCompletion() {
+            let checkXhr = new XMLHttpRequest();
+            checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Corrected status route
 
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
+            checkXhr.onload = function() {
+                let response = JSON.parse(checkXhr.responseText);
+                if (response.status === "completed") { 
+                    document.getElementById("progress").innerHTML = "✅ Files are ready!";
+                    document.getElementById("downloadBtn").disabled = false;
+                    document.getElementById("downloadBtn").style.display = "inline";  
+                } else {
+                    document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
+                    setTimeout(checkProcessingCompletion, 5000); // ✅ Retry every 5 sec until processing completes
+                }
+            };
 
-        checkXhr.send();
-    }
-</script>
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
+            checkXhr.onerror = function() {
+                document.getElementById("progress").innerHTML = "❌ Error checking file status!";
+            };
 
-    function runProcessing(event) {
-        event.preventDefault();
+            checkXhr.send();
+        }
 
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
+        function downloadFiles(event) {
+            event.preventDefault();
 
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
-            }
-        };
+            let outputFiles = ["clean.txt", "unclean.txt", "final.srt", "output.ass", "timestamps.txt"];
+            outputFiles.forEach(file => {
+                let link = document.createElement("a");
+                link.href = `${RENDER_URL}/download/${file}`;
+                link.download = file;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
 
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
-
-        xhr.send();
-    }
-
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
-
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
-            }
-        };
-
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
-
-        checkXhr.send();
-    }
-</script>
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
-
-    function runProcessing(event) {
-        event.preventDefault();
-
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
-
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
-            }
-        };
-
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
-
-        xhr.send();
-    }
-
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
-
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
-            }
-        };
-
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
-
-        checkXhr.send();
-    }
-</script>
-<script>
-    const RENDER_URL = "https://timestamps-5nub.onrender.com"; 
-
-    function runProcessing(event) {
-        event.preventDefault();
-
-        let xhr = new XMLHttpRequest();
-        xhr.open("GET", `${RENDER_URL}/process`, true);
-        document.getElementById("progress").innerHTML = "⏳ Processing started...";
-
-        xhr.onload = function() {
-            if (xhr.status === 200) {
-                document.getElementById("progress").innerHTML = "✅ Processing complete! Checking file availability...";
-                
-                checkProcessingCompletion(); // ✅ New function to confirm files are ready
-            } else {
-                document.getElementById("progress").innerHTML = "❌ Error in processing!";
-            }
-        };
-
-        xhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Network Error!";
-        };
-
-        xhr.send();
-    }
-
-    function checkProcessingCompletion() {
-        let checkXhr = new XMLHttpRequest();
-        checkXhr.open("GET", `${RENDER_URL}/status`, true); // ✅ Assuming your backend has an endpoint to confirm completion
-
-        checkXhr.onload = function() {
-            if (checkXhr.status === 200 && checkXhr.responseText === "completed") { 
-                document.getElementById("progress").innerHTML = "✅ Files are ready!";
-                document.getElementById("downloadBtn").disabled = false;
-                document.getElementById("downloadBtn").style.display = "inline";  
-            } else {
-                document.getElementById("progress").innerHTML = "⏳ Processing still ongoing...";
-                setTimeout(checkProcessingCompletion, 5000); // ✅ Retry after 5 sec if processing isn’t done
-            }
-        };
-
-        checkXhr.onerror = function() {
-            document.getElementById("progress").innerHTML = "❌ Error checking file status!";
-        };
-
-        checkXhr.send();
-    }
-</script>
+            document.getElementById("progress").innerHTML = "✅ All files downloaded!";
+        }
+    </script>
+</body>
+</html>
