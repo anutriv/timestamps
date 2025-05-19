@@ -6,6 +6,7 @@ import shutil
 import whisper
 import nltk
 import threading
+import json
 from nltk.stem import WordNetLemmatizer
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
@@ -36,113 +37,85 @@ lemmatizer = WordNetLemmatizer()
 
 EXCEPTIONS = {"as", "pass", "bass"}
 
-### Convert MP4 to MP3 with FFmpeg (Fix FFmpeg Stalling Issue) ###
+### Convert MP4 to MP3 ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
-    print(f"🔹 Running FFmpeg on {input_mp4}...")
-    try:
-        result = subprocess.run(
-            ["ffmpeg", "-y", "-nostdin", "-loglevel", "error", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3],
-            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        print(f"✅ FFmpeg completed: {result.returncode}")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ FFmpeg failed: {e.stderr.decode()}")
-        raise
+    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
 
 ### Load Swear Words ###
 def load_swears(file_path):
     with open(file_path, 'r', encoding='utf-8') as file:
         return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
 
-### Serve Index Page ###
-@app.route('/')
-def serve_index():
-    return send_file(os.path.join(STATIC_FOLDER, "index.html"))
+### Extract Short Audio Segments for Faster Whisper Processing ###
+def extract_audio_segments(mp3_path, subtitle_file):
+    timestamp_audio_folder = os.path.join(PROCESSED_FOLDER, "timestamp_audio")
+    os.makedirs(timestamp_audio_folder, exist_ok=True)
 
-### File Upload Route ###
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    if 'ass_file' not in request.files or 'mp4_file' not in request.files:
-        return jsonify({"error": "Missing ASS or MP4 file"}), 400
+    timestamps = []
+    with open(subtitle_file, "r", encoding="utf-8") as f:
+        subtitle_lines = f.readlines()
+    
+    for i, line in enumerate(subtitle_lines):
+        if "-->" in line:
+            start_time, end_time = line.split("-->")
+            start_time = start_time.strip()
+            end_time = end_time.strip()
 
-    ass_file = request.files['ass_file']
-    mp4_file = request.files['mp4_file']
+            timestamps.append((start_time, end_time))
 
-    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
-    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+            output_segment = os.path.join(timestamp_audio_folder, f"segment_{i}.mp3")
+            subprocess.run(["ffmpeg", "-y", "-i", mp3_path, "-ss", start_time, "-to", end_time, "-q:a", "0", "-map", "a", output_segment], check=True)
+    
+    return timestamps, timestamp_audio_folder
 
-    ass_file.save(ass_path)
-    mp4_file.save(mp4_path)
+### Generate Timestamps & Final SRT ###
+def process_audio_for_timestamps(mp3_path):
+    subtitle_file = os.path.join(PROCESSED_FOLDER, "output.ass")
+    timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
+    final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
 
-    return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
+    timestamps, audio_segments_folder = extract_audio_segments(mp3_path, subtitle_file)
 
-### Censor Subtitles ###
-def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
-    swears = load_swears(swears_file)
-    with open(input_ass, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
+    whisper_model = whisper.load_model("small")  # ✅ Efficient model for lower CPU usage
 
-    censored_lines, affected_lines, original_affected_lines = [], [], []
-    for line in lines:
-        original_line = line  
-        modified = False
+    srt_lines = []
+    timestamps_output = []
 
-        words = re.findall(r'\b\w+\b', line)
-        for word in words:
-            lemma_word = lemmatizer.lemmatize(word.lower(), pos='v')
-            lemma_word_noun = lemmatizer.lemmatize(word.lower(), pos='n')
+    for i, (start_time, end_time) in enumerate(timestamps):
+        segment_audio = os.path.join(audio_segments_folder, f"segment_{i}.mp3")
+        if os.path.exists(segment_audio):
+            result = whisper_model.transcribe(segment_audio)
+            text = result["text"].strip()
 
-            if (lemma_word in swears or lemma_word_noun in swears) and word.lower() not in EXCEPTIONS:
-                line = line.replace(word, word[0] + '.' * (len(word) - 1))
-                modified = True
+            srt_lines.append(f"{i+1}\n{start_time} --> {end_time}\n{text}\n")
+            timestamps_output.append(f"{start_time} {text}")
 
-        censored_lines.append(line)
-        if modified and line.startswith("Dialogue:"):
-            affected_lines.append(line)
-            original_affected_lines.append(original_line)
+    with open(final_srt_file, "w", encoding="utf-8") as f:
+        f.writelines(srt_lines)
 
-    with open(output_ass, 'w', encoding='utf-8') as file:
-        file.writelines(censored_lines)
-    with open(clean_file, 'w', encoding='utf-8') as file:
-        file.writelines(affected_lines)
-    with open(unclean_file, 'w', encoding='utf-8') as file:
-        file.writelines(original_affected_lines)
+    with open(timestamps_file, "w", encoding="utf-8") as f:
+        f.writelines("\n".join(timestamps_output))
 
-### Background Processing (Creates & Cleans `processed/audio_chunks/` and Deletes MP3) ###
+    shutil.rmtree(audio_segments_folder)  # ✅ Cleanup temporary audio files
+
+### Background Processing ###
 def async_process_files():
-    try:
-        print("🔹 Starting async processing...")
-        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
-        mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-        convert_mp4_to_mp3(mp4_path, mp3_path)
+    convert_mp4_to_mp3(mp4_path, mp3_path)
 
-        audio_chunks_path = os.path.join(PROCESSED_FOLDER, "audio_chunks")
-        os.makedirs(audio_chunks_path, exist_ok=True)
+    censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
 
-        censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
+    process_audio_for_timestamps(mp3_path)  # ✅ Efficient timestamp and SRT generation
 
-        print("✅ Processing complete! Cleaning up...")
+    os.remove(mp3_path)  # ✅ Cleanup MP3 after processing
 
-        if os.path.exists(audio_chunks_path):
-            shutil.rmtree(audio_chunks_path)
-
-        if os.path.exists(mp3_path):
-            os.remove(mp3_path)
-
-        print("✅ Cleanup done!")
-
-    except Exception as e:
-        print(f"❌ Processing failed: {str(e)}")
-
-### Process Route (Runs in Background Thread to Prevent Blocking) ###
+### Process Route ###
 @app.route('/process', methods=['GET'])
 def process_files():
-    print("✅ Process request received!")
-    t = threading.Thread(target=async_process_files)
-    t.daemon = True  # ✅ Ensures Flask doesn't block waiting for the thread
-    t.start()
+    threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
 
 ### Download Processed Files ###
