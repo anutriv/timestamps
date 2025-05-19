@@ -36,9 +36,11 @@ nltk.download('wordnet')
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
-### Convert MP4 to MP3 ###
+### Convert MP4 to MP3 (Immediately Upon Upload) ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
+    print(f"🔹 Converting {input_mp4} to MP3...")
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
+    print(f"✅ MP3 saved at {output_mp3}")
 
 ### Segment MP3 to Reduce Memory Usage ###
 def segment_audio(mp3_path, segment_folder):
@@ -71,6 +73,7 @@ def upload_files():
 
     ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
     try:
         ass_file.save(ass_path)
@@ -80,14 +83,21 @@ def upload_files():
         if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
             return jsonify({"error": "File save failed. Check server permissions."}), 500
 
+        print("🔹 MP4 uploaded successfully. Converting to MP3...")
+        convert_mp4_to_mp3(mp4_path, mp3_path)
+        
+        if os.path.exists(mp3_path):  
+            print("✅ MP3 conversion successful! Deleting MP4...")
+            os.remove(mp4_path)  # ✅ Remove MP4 after MP3 is generated
+
         subprocess.run(["chmod", "-R", "777", UPLOAD_FOLDER], check=True)
 
     except Exception as e:
         return jsonify({"error": f"File save failed: {str(e)}"}), 500
 
-    return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
+    return jsonify({"success": True, "message": "Files uploaded & MP4 converted to MP3!"}), 200
 
-### Whisper Transcription Runs Externally (Optimized with `--fp16`) ###
+### Whisper Transcription Runs Externally ###
 def process_audio_for_timestamps(mp3_path):
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
@@ -100,9 +110,7 @@ def process_audio_for_timestamps(mp3_path):
                 segment_path = os.path.join(segment_folder, segment_file)
 
                 print(f"🔹 Processing {segment_file} with Whisper...")
-
-                # ✅ Whisper now correctly runs with `--fp16`
-                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--fp16"], capture_output=True, text=True)
+                result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
 
                 if result.returncode == 0:
                     transcribed_text = result.stdout.strip()
@@ -111,25 +119,18 @@ def process_audio_for_timestamps(mp3_path):
                 else:
                     print(f"❌ Whisper failed for {segment_file}. Error:\n{result.stderr}")
 
-        shutil.rmtree(segment_folder)
+        shutil.rmtree(segment_folder)  # ✅ Cleanup audio segments
 
 def async_process_files():
     global processing_status
     try:
         processing_status["completed"] = False
-        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-        if os.path.exists(mp4_path):  
-            convert_mp4_to_mp3(mp4_path, mp3_path)
-        else:
-            print(f"❌ Error: MP4 file '{mp4_path}' not found.")
-            return
+        if os.path.exists(mp3_path):  
+            process_audio_for_timestamps(mp3_path)
+            os.remove(mp3_path)  # ✅ Delete MP3 after processing
 
-        process_audio_for_timestamps(mp3_path)
-
-        os.remove(mp3_path)
         processing_status["completed"] = True
 
     except Exception as e:
@@ -138,10 +139,10 @@ def async_process_files():
 
 @app.route('/process', methods=['GET'])
 def process_files():
-    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-    
-    if not os.path.exists(mp4_path):
-        return jsonify({"error": "Processing failed: Required files not found."}), 500
+    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+
+    if not os.path.exists(mp3_path):
+        return jsonify({"error": "Processing failed: MP3 file not found."}), 500
 
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
