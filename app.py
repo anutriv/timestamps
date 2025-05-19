@@ -47,6 +47,16 @@ def convert_mp4_to_mp3(input_mp4, output_mp3):
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
 
+### Load Swear Words ###
+def load_swears(file_path):
+    """Loads swear words from a file, removing exceptions."""
+    if not os.path.exists(file_path):
+        print(f"⚠️ Warning: Swears file '{file_path}' not found!")
+        return set()  # Return an empty set if the file is missing
+
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
+
 ### File Upload Route ###
 @app.route('/upload', methods=['POST'])
 def upload_files():
