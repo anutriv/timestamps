@@ -5,15 +5,16 @@ import subprocess
 import shutil
 import nltk
 import threading
+import time
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder='static')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-UPLOAD_FOLDER = "uploads"
-PROCESSED_FOLDER = "processed"
-STATIC_FOLDER = "static"
+UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")  # ✅ Ensure absolute paths
+PROCESSED_FOLDER = os.path.join(os.getcwd(), "processed")
+STATIC_FOLDER = os.path.join(os.getcwd(), "static")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
@@ -79,6 +80,15 @@ def upload_files():
     try:
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
+
+        # ✅ Ensure files are actually saved before proceeding
+        time.sleep(2)  # ✅ Wait for files to complete saving
+        if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
+            return jsonify({"error": "File save failed. Check server permissions."}), 500
+
+        # ✅ Fix file access permissions
+        subprocess.run(["chmod", "-R", "777", UPLOAD_FOLDER], check=True)
+
     except Exception as e:
         return jsonify({"error": f"File save failed: {str(e)}"}), 500
 
@@ -127,7 +137,6 @@ def process_audio_for_timestamps(mp3_path):
             for segment_file in sorted(os.listdir(segment_folder)):
                 segment_path = os.path.join(segment_folder, segment_file)
 
-                # ✅ Whisper now runs as an external process
                 result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
 
                 if result.returncode == 0:
@@ -147,7 +156,7 @@ def async_process_files():
         ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-        if os.path.exists(mp4_path):
+        if os.path.exists(mp4_path):  
             convert_mp4_to_mp3(mp4_path, mp3_path)
         else:
             print(f"❌ Error: MP4 file '{mp4_path}' not found.")
@@ -165,6 +174,12 @@ def async_process_files():
 
 @app.route('/process', methods=['GET'])
 def process_files():
+    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+
+    if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
+        return jsonify({"error": "Processing failed: Required files not found."}), 500
+
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
 
