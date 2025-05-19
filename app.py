@@ -3,7 +3,6 @@ import re
 import sys
 import subprocess
 import shutil
-import whisper
 import nltk
 import threading
 from flask import Flask, request, send_file, jsonify
@@ -44,7 +43,6 @@ def convert_mp4_to_mp3(input_mp4, output_mp3):
 def segment_audio(mp3_path, segment_folder):
     os.makedirs(segment_folder, exist_ok=True)
     
-    # ✅ Added file existence check to prevent errors
     if not os.path.exists(mp3_path):
         print(f"❌ Error: MP3 file '{mp3_path}' not found.")
         return False
@@ -52,7 +50,7 @@ def segment_audio(mp3_path, segment_folder):
     subprocess.run(["ffmpeg", "-i", mp3_path, "-f", "segment", "-segment_time", "30",
                     "-c", "copy", f"{segment_folder}/segment_%03d.mp3"], check=True)
     
-    return True  # ✅ Indicate success
+    return True  
 
 @app.route('/')
 def serve_index():
@@ -117,22 +115,27 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
     with open(unclean_file, 'w', encoding='utf-8') as file:
         file.writelines(original_affected_lines)
 
+### Whisper Transcription Runs Externally ###
 def process_audio_for_timestamps(mp3_path):
-    whisper_model = whisper.load_model("tiny")
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
     
-    if segment_audio(mp3_path, segment_folder):  # ✅ Ensure segmentation is successful
+    if segment_audio(mp3_path, segment_folder):
         timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
         final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
 
         with open(timestamps_file, "w", encoding="utf-8") as f, open(final_srt_file, "w", encoding="utf-8") as srt_f:
             for segment_file in sorted(os.listdir(segment_folder)):
                 segment_path = os.path.join(segment_folder, segment_file)
-                result = whisper_model.transcribe(segment_path)
 
-                for i, segment in enumerate(result["segments"]):
-                    f.write(f"{segment['start']} --> {segment['end']} {segment['text']}\n")
-                    srt_f.write(f"{i+1}\n{segment['start']} --> {segment['end']}\n{segment['text']}\n\n")
+                # ✅ Whisper now runs as an external process
+                result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+
+                if result.returncode == 0:
+                    transcribed_text = result.stdout.strip()
+                    f.write(f"{segment_file} {transcribed_text}\n")
+                    srt_f.write(f"{segment_file}\n{transcribed_text}\n\n")
+                else:
+                    print(f"❌ Error processing {segment_file}: {result.stderr}")
 
         shutil.rmtree(segment_folder)
 
@@ -144,7 +147,7 @@ def async_process_files():
         ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-        if os.path.exists(mp4_path):  # ✅ Prevents FFmpeg errors
+        if os.path.exists(mp4_path):
             convert_mp4_to_mp3(mp4_path, mp3_path)
         else:
             print(f"❌ Error: MP4 file '{mp4_path}' not found.")
