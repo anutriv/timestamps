@@ -12,7 +12,7 @@ from flask_cors import CORS
 app = Flask(__name__, static_folder='static')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
-UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")  # ✅ Ensure absolute paths
+UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 PROCESSED_FOLDER = os.path.join(os.getcwd(), "processed")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -48,23 +48,18 @@ def segment_audio(mp3_path, segment_folder):
         print(f"❌ Error: MP3 file '{mp3_path}' not found.")
         return False
 
-    subprocess.run(["ffmpeg", "-i", mp3_path, "-f", "segment", "-segment_time", "30",
-                    "-c", "copy", f"{segment_folder}/segment_%03d.mp3"], check=True)
-    
+    result = subprocess.run(["ffmpeg", "-i", mp3_path, "-f", "segment", "-segment_time", "30",
+                             "-c", "copy", f"{segment_folder}/segment_%03d.mp3"], capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"❌ FFmpeg segmentation error: {result.stderr}")
+        return False
+
     return True  
 
 @app.route('/')
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
-
-def load_swears(file_path):
-    """Loads swear words from a file, removing exceptions."""
-    if not os.path.exists(file_path):
-        print(f"⚠️ Warning: Swears file '{file_path}' not found!")
-        return set()
-
-    with open(file_path, 'r', encoding='utf-8') as file:
-        return {line.strip().lower() for line in file if line.strip().lower() not in EXCEPTIONS}
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
@@ -81,12 +76,10 @@ def upload_files():
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
 
-        # ✅ Ensure files are actually saved before proceeding
-        time.sleep(2)  # ✅ Wait for files to complete saving
+        time.sleep(2)  # ✅ Wait for files to be fully saved
         if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
             return jsonify({"error": "File save failed. Check server permissions."}), 500
 
-        # ✅ Fix file access permissions
         subprocess.run(["chmod", "-R", "777", UPLOAD_FOLDER], check=True)
 
     except Exception as e:
@@ -94,41 +87,10 @@ def upload_files():
 
     return jsonify({"success": True, "message": "Files uploaded successfully!"}), 200
 
-def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file):
-    swears = load_swears(swears_file)
-    with open(input_ass, 'r', encoding='utf-8') as file:
-        lines = file.readlines()
-
-    censored_lines, affected_lines, original_affected_lines = [], [], []
-    for line in lines:
-        original_line = line  
-        modified = False
-
-        words = re.findall(r'\b\w+\b', line)
-        for word in words:
-            lemma_word = lemmatizer.lemmatize(word.lower(), pos='v')
-            lemma_word_noun = lemmatizer.lemmatize(word.lower(), pos='n')
-
-            if (lemma_word in swears or lemma_word_noun in swears) and word.lower() not in EXCEPTIONS:
-                line = line.replace(word, word[0] + '.' * (len(word) - 1))
-                modified = True
-
-        censored_lines.append(line)
-        if modified and line.startswith("Dialogue:"):
-            affected_lines.append(line)
-            original_affected_lines.append(original_line)
-
-    with open(output_ass, 'w', encoding='utf-8') as file:
-        file.writelines(censored_lines)
-    with open(clean_file, 'w', encoding='utf-8') as file:
-        file.writelines(affected_lines)
-    with open(unclean_file, 'w', encoding='utf-8') as file:
-        file.writelines(original_affected_lines)
-
-### Whisper Transcription Runs Externally ###
+### Whisper Transcription Runs Externally (Optimized for Low Memory Usage) ###
 def process_audio_for_timestamps(mp3_path):
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
-    
+
     if segment_audio(mp3_path, segment_folder):
         timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
         final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
@@ -137,14 +99,17 @@ def process_audio_for_timestamps(mp3_path):
             for segment_file in sorted(os.listdir(segment_folder)):
                 segment_path = os.path.join(segment_folder, segment_file)
 
-                result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+                print(f"🔹 Processing {segment_file} with Whisper...")
+
+                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--compute_type", "float16"],
+                                        capture_output=True, text=True)
 
                 if result.returncode == 0:
                     transcribed_text = result.stdout.strip()
                     f.write(f"{segment_file} {transcribed_text}\n")
                     srt_f.write(f"{segment_file}\n{transcribed_text}\n\n")
                 else:
-                    print(f"❌ Error processing {segment_file}: {result.stderr}")
+                    print(f"❌ Whisper failed for {segment_file}. Error:\n{result.stderr}")
 
         shutil.rmtree(segment_folder)
 
@@ -162,7 +127,6 @@ def async_process_files():
             print(f"❌ Error: MP4 file '{mp4_path}' not found.")
             return
 
-        censor_ass_file(ass_path, "swears.txt", "processed/output.ass", "processed/clean.txt", "processed/unclean.txt")
         process_audio_for_timestamps(mp3_path)
 
         os.remove(mp3_path)
@@ -175,9 +139,8 @@ def async_process_files():
 @app.route('/process', methods=['GET'])
 def process_files():
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-    ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
-
-    if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
+    
+    if not os.path.exists(mp4_path):
         return jsonify({"error": "Processing failed: Required files not found."}), 500
 
     threading.Thread(target=async_process_files).start()
@@ -195,4 +158,4 @@ def download_file(filename):
     return jsonify({"error": "File not found or empty"}), 404
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)))
+    app.run(host='0.0.0.0', port=5000)
