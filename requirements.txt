@@ -6,3 +6,4 @@ ffmpeg-python
 flask-cors
 flask
 pydub
+openai-whisper
