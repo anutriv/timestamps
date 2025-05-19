@@ -108,7 +108,7 @@ def censor_ass_file(input_ass, swears_file, output_ass, clean_file, unclean_file
 
 ### Whisper Transcription ###
 def process_audio_for_timestamps(mp3_path):
-    whisper_model = whisper.load_model("small")
+    whisper_model = whisper.Whisper.load_model("small")
     result = whisper_model.transcribe(mp3_path)
 
     timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
