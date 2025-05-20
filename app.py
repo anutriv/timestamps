@@ -120,11 +120,12 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
         clean_lines = f.readlines()
 
     segment_time = 5
+    total_lines = len(clean_lines)  # ✅ Only process exact number of lines
 
-    for idx, _ in enumerate(clean_lines):
+    for idx in range(total_lines):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
 
-        print(f"🔹 Extracting chunk {idx} from MP3...")
+        print(f"🔹 Extracting chunk {idx} for subtitle {idx+1}/{total_lines}...")
         subprocess.run([
             "ffmpeg", "-y", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), 
             "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", output_segment
@@ -132,40 +133,6 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
 
         if not os.path.exists(output_segment) or os.path.getsize(output_segment) == 0:
             print(f"❌ Failed to create {output_segment} - Skipping.")
-
-### Step 4: Run Vosk to Extract Timestamps (NOT Text) ###
-def process_audio_for_word_timestamps(segment_folder):
-    model = Model(VOSK_MODEL_PATH)
-    word_timestamps = {}
-
-    for segment_file in sorted(os.listdir(segment_folder)):
-        segment_path = os.path.join(segment_folder, segment_file)
-        wf = wave.open(segment_path, "rb")
-
-        rec = KaldiRecognizer(model, wf.getframerate())
-        rec.SetWords(True)  
-
-        swear_timestamps = []
-
-        while True:
-            data = wf.readframes(4000)
-            if len(data) == 0:
-                break
-            if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                for word in result["result"]:
-                    start_time = round(word["start"], 2)
-                    end_time = round(word["end"], 2)
-                    
-                    if word["word"].lower() in SWEAR_WORDS:
-                        swear_timestamps.append(f"{start_time:.2f} --> {end_time:.2f}")
-
-        word_timestamps[segment_file] = swear_timestamps
-
-    swear_timestamp_file = os.path.join(PROCESSED_FOLDER, "swear_timestamps.txt")
-    with open(swear_timestamp_file, "w", encoding="utf-8") as f:
-        for timestamps in word_timestamps.values():
-            f.write("\n".join(timestamps) + "\n")
 
 ### ✅ Updated `async_process_files()` ###
 def async_process_files():
@@ -185,7 +152,6 @@ def async_process_files():
     extract_required_chunks(mp3_path, clean_file, segment_folder)
     os.remove(mp3_path)
 
-    process_audio_for_word_timestamps(segment_folder)
     processing_status["completed"] = True
 
 @app.route("/process", methods=["GET"])
