@@ -37,10 +37,17 @@ nltk.download('wordnet')
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
-### **Load Whisper Model from Cache Before Processing Starts**
-print("🔹 Preloading Whisper model to prevent redownload delays...")
-whisper_model = whisper.load_model("tiny")
-print("✅ Whisper model loaded successfully!")
+### **Whisper Model Caching: Prevent Redundant Downloads**
+WHISPER_CACHE_DIR = os.path.expanduser("~/.cache/whisper")
+os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure cache directory exists
+
+if not os.path.exists(os.path.join(WHISPER_CACHE_DIR, "tiny.pt")):
+    print("🔹 Downloading Whisper model for the first time...")
+    whisper_model = whisper.load_model("tiny")
+    print("✅ Whisper model downloaded and cached.")
+else:
+    print("✅ Using cached Whisper model!")
+    whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
