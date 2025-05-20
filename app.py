@@ -119,7 +119,7 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
     with open(clean_file, "r", encoding="utf-8") as f:
         clean_lines = f.readlines()
 
-    segment_time = 5  # Optimize segment length per clean line
+    segment_time = 5
     for idx, _ in enumerate(clean_lines):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
         subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-ac", "1", "-ar", "16000", output_segment], check=True)
@@ -135,7 +135,7 @@ def process_audio_for_word_timestamps(segment_folder):
         wf = wave.open(segment_path, "rb")
 
         rec = KaldiRecognizer(model, wf.getframerate())
-        rec.SetWords(True)  # ✅ Enable word-level timing
+        rec.SetWords(True)  
 
         srt_output = []
         swear_timestamps = []
@@ -151,7 +151,7 @@ def process_audio_for_word_timestamps(segment_folder):
                     end_time = round(word["end"], 2)
                     srt_output.append(f"{start_time:.2f} --> {end_time:.2f}\n{word['word']}\n")
 
-                    if word["word"].lower() in SWEAR_WORDS:  # ✅ Capture swear words timing
+                    if word["word"].lower() in SWEAR_WORDS:
                         swear_timestamps.append(f"{start_time:.2f} --> {end_time:.2f}")
 
         srt_data[segment_file] = "\n".join(srt_output)
@@ -162,7 +162,20 @@ def process_audio_for_word_timestamps(segment_folder):
         for timestamps in word_timestamps.values():
             f.write("\n".join(timestamps) + "\n")
 
-    return srt_data, swear_timestamp_file
+### ✅ Define `async_process_files()` BEFORE calling it! ###
+def async_process_files():
+    global processing_status
+    processing_status["completed"] = False
+
+    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+    clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+    segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
+
+    extract_required_chunks(mp3_path, clean_file, segment_folder)
+    os.remove(mp3_path)
+
+    process_audio_for_word_timestamps(segment_folder)
+    processing_status["completed"] = True
 
 @app.route("/process", methods=["GET"])
 def process_files():
