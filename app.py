@@ -37,6 +37,11 @@ nltk.download('wordnet')
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
+### **Load Whisper Model from Cache Before Processing Starts**
+print("🔹 Preloading Whisper model to prevent redownload delays...")
+whisper_model = whisper.load_model("tiny")
+print("✅ Whisper model loaded successfully!")
+
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
     clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
@@ -82,23 +87,27 @@ def extract_required_chunks(mp3_path, unclean_file, segment_folder):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.mp3")
         subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-c", "copy", output_segment], check=True)
 
-### Step 4: Run Whisper on Extracted Chunks ###
+### Step 4: Run Whisper on Extracted Chunks (Optimized for Render Free-Tier) ###
 def process_audio_for_timestamps(segment_folder):
     timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
     final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
 
-    with open(timestamps_file, "w", encoding="utf-8") as f, open(final_srt_file, "w", encoding="utf-8") as srt_f:
-        for segment_file in sorted(os.listdir(segment_folder)):
-            segment_path = os.path.join(segment_folder, segment_file)
-            print(f"🔹 Processing {segment_file} with Whisper...")
-            result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+    def run_whisper(segment_path):
+        print(f"🔹 Processing {segment_path} with Whisper...")
+        return subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
 
-            if result.returncode == 0:
-                transcribed_text = result.stdout.strip()
-                f.write(f"{segment_file} {transcribed_text}\n")
-                srt_f.write(f"{segment_file}\n{transcribed_text}\n\n")
-            else:
-                print(f"❌ Whisper failed for {segment_file}. Error:\n{result.stderr}")
+    threads = []
+    MAX_CONCURRENT_THREADS = 3  # ✅ Balanced approach to avoid overloading Render CPU
+    for idx, segment_file in enumerate(sorted(os.listdir(segment_folder))):
+        segment_path = os.path.join(segment_folder, segment_file)
+        thread = threading.Thread(target=run_whisper, args=(segment_path,))
+        threads.append(thread)
+        thread.start()
+
+        if len(threads) >= MAX_CONCURRENT_THREADS:  
+            for t in threads:
+                t.join()
+            threads.clear()  # ✅ Reset batch & start next batch
 
 ### Step 5: Cleanup Temporary Files ###
 def cleanup(segment_folder, mp3_path):
@@ -135,7 +144,7 @@ def upload_files():
     except Exception as e:
         return jsonify({"error": f"File save failed: {str(e)}"}), 500
 
-    return jsonify({"success": True, "message": "Files uploaded & processed!"}), 200
+    return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200
 
 def async_process_files():
     global processing_status
