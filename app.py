@@ -10,7 +10,6 @@ import whisper
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 
-
 app = Flask(__name__, static_folder='static')
 CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
@@ -38,28 +37,73 @@ nltk.download('wordnet')
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
-### Convert MP4 to MP3 (Immediately Upon Upload) ###
+### Step 1: Extract Clean, Unclean & Output.ass ###
+def process_subtitles(ass_path):
+    clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+    unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
+    output_ass = os.path.join(PROCESSED_FOLDER, "output.ass")
+
+    with open(ass_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    clean_lines = []
+    unclean_lines = []
+
+    for line in lines:
+        text = line.strip()
+        if re.search(r"[a-zA-Z]", text):
+            clean_lines.append(text)
+        else:
+            unclean_lines.append(text)
+
+    with open(clean_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(clean_lines))
+
+    with open(unclean_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(unclean_lines))
+
+    shutil.copy(ass_path, output_ass)
+
+### Step 2: Convert MP4 to MP3 ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     print(f"🔹 Converting {input_mp4} to MP3...")
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
     print(f"✅ MP3 saved at {output_mp3}")
 
-### Segment MP3 to Reduce Memory Usage ###
-def segment_audio(mp3_path, segment_folder):
+### Step 3: Extract Required Chunks Based on Unclean File ###
+def extract_required_chunks(mp3_path, unclean_file, segment_folder):
     os.makedirs(segment_folder, exist_ok=True)
-    
-    if not os.path.exists(mp3_path):
-        print(f"❌ Error: MP3 file '{mp3_path}' not found.")
-        return False
 
-    result = subprocess.run(["ffmpeg", "-i", mp3_path, "-f", "segment", "-segment_time", "30",
-                             "-c", "copy", f"{segment_folder}/segment_%03d.mp3"], capture_output=True, text=True)
+    with open(unclean_file, "r", encoding="utf-8") as f:
+        unclean_lines = f.readlines()
 
-    if result.returncode != 0:
-        print(f"❌ FFmpeg segmentation error: {result.stderr}")
-        return False
+    segment_time = 5  # Optimize segment length per unclean line
+    for idx, _ in enumerate(unclean_lines):
+        output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.mp3")
+        subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-c", "copy", output_segment], check=True)
 
-    return True  
+### Step 4: Run Whisper on Extracted Chunks ###
+def process_audio_for_timestamps(segment_folder):
+    timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
+    final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
+
+    with open(timestamps_file, "w", encoding="utf-8") as f, open(final_srt_file, "w", encoding="utf-8") as srt_f:
+        for segment_file in sorted(os.listdir(segment_folder)):
+            segment_path = os.path.join(segment_folder, segment_file)
+            print(f"🔹 Processing {segment_file} with Whisper...")
+            result = subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+
+            if result.returncode == 0:
+                transcribed_text = result.stdout.strip()
+                f.write(f"{segment_file} {transcribed_text}\n")
+                srt_f.write(f"{segment_file}\n{transcribed_text}\n\n")
+            else:
+                print(f"❌ Whisper failed for {segment_file}. Error:\n{result.stderr}")
+
+### Step 5: Cleanup Temporary Files ###
+def cleanup(segment_folder, mp3_path):
+    shutil.rmtree(segment_folder)
+    os.remove(mp3_path)  # ✅ Delete MP3 after chunk extraction
 
 @app.route('/')
 def serve_index():
@@ -81,58 +125,32 @@ def upload_files():
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
 
-        time.sleep(2)  # ✅ Wait for files to be fully saved
-        if not os.path.exists(mp4_path) or not os.path.exists(ass_path):
-            return jsonify({"error": "File save failed. Check server permissions."}), 500
+        print("🔹 Extracting clean, unclean, and output.ass...")
+        process_subtitles(ass_path)
 
         print("🔹 MP4 uploaded successfully. Converting to MP3...")
         convert_mp4_to_mp3(mp4_path, mp3_path)
-        
-        if os.path.exists(mp3_path):  
-            print("✅ MP3 conversion successful! Deleting MP4...")
-            os.remove(mp4_path)  # ✅ Remove MP4 after MP3 is generated
-
-        subprocess.run(["chmod", "-R", "777", UPLOAD_FOLDER], check=True)
+        os.remove(mp4_path)  # ✅ Remove MP4 after MP3 is generated
 
     except Exception as e:
         return jsonify({"error": f"File save failed: {str(e)}"}), 500
 
-    return jsonify({"success": True, "message": "Files uploaded & MP4 converted to MP3!"}), 200
-
-### Whisper Transcription Runs Externally ###
-whisper_model = whisper.load_model("tiny")
-def process_audio_for_timestamps(mp3_path):
-    segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
-
-    if segment_audio(mp3_path, segment_folder):
-        timestamps_file = os.path.join(PROCESSED_FOLDER, "timestamps.txt")
-        final_srt_file = os.path.join(PROCESSED_FOLDER, "final.srt")
-
-        with open(timestamps_file, "w", encoding="utf-8") as f, open(final_srt_file, "w", encoding="utf-8") as srt_f:
-            for segment_file in sorted(os.listdir(segment_folder)):
-                segment_path = os.path.join(segment_folder, segment_file)
-
-                print(f"🔹 Processing {segment_file} with Whisper...")
-                result = subprocess.run(["whisper", segment_path, "--model", "tiny", "--model_dir", "whisper_models"], capture_output=True, text=True)
-
-                if result.returncode == 0:
-                    transcribed_text = result.stdout.strip()
-                    f.write(f"{segment_file} {transcribed_text}\n")
-                    srt_f.write(f"{segment_file}\n{transcribed_text}\n\n")
-                else:
-                    print(f"❌ Whisper failed for {segment_file}. Error:\n{result.stderr}")
-
-        shutil.rmtree(segment_folder)  # ✅ Cleanup audio segments
+    return jsonify({"success": True, "message": "Files uploaded & processed!"}), 200
 
 def async_process_files():
     global processing_status
     try:
         processing_status["completed"] = False
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+        unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
+        segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
-        if os.path.exists(mp3_path):  
-            process_audio_for_timestamps(mp3_path)
-            os.remove(mp3_path)  # ✅ Delete MP3 after processing
+        print("🔹 Extracting required chunks...")
+        extract_required_chunks(mp3_path, unclean_file, segment_folder)
+        os.remove(mp3_path)  # ✅ Delete MP3 after extracting chunks
+
+        process_audio_for_timestamps(segment_folder)
+        cleanup(segment_folder, mp3_path)  # ✅ Final cleanup
 
         processing_status["completed"] = True
 
@@ -142,24 +160,8 @@ def async_process_files():
 
 @app.route('/process', methods=['GET'])
 def process_files():
-    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
-
-    if not os.path.exists(mp3_path):
-        return jsonify({"error": "Processing failed: MP3 file not found."}), 500
-
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
-
-@app.route('/status', methods=['GET'])
-def get_status():
-    return jsonify({"status": "completed" if processing_status["completed"] else "in_progress"})
-
-@app.route('/download/<filename>', methods=['GET'])
-def download_file(filename):
-    file_path = os.path.join(PROCESSED_FOLDER, filename)
-    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
-        return send_file(file_path, as_attachment=True)
-    return jsonify({"error": "File not found or empty"}), 404
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)))
