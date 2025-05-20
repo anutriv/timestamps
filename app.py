@@ -82,7 +82,13 @@ def upload_files():
     except Exception as e:
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500  # ✅ Always return JSON for errors
 
-### Step 1: Extract Clean, Unclean & Output.ass ###
+### Step 1: Convert MP4 to MP3 First ###
+def convert_mp4_to_mp3(input_mp4, output_mp3):
+    print(f"🔹 Converting {input_mp4} to MP3...")
+    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
+    print(f"✅ MP3 saved at {output_mp3}")
+
+### Step 2: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
     clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
     unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
@@ -106,13 +112,7 @@ def process_subtitles(ass_path):
     with open(unclean_file, "w", encoding="utf-8") as f:
         f.write("\n".join(unclean_lines))
 
-### Step 2: Convert MP4 to MP3 ###
-def convert_mp4_to_mp3(input_mp4, output_mp3):
-    print(f"🔹 Converting {input_mp4} to MP3...")
-    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
-    print(f"✅ MP3 saved at {output_mp3}")
-
-### Step 3: Extract Required Chunks Based on Clean File ###
+### Step 3: Extract Audio Chunks Based on Clean.txt ###
 def extract_required_chunks(mp3_path, clean_file, segment_folder):
     os.makedirs(segment_folder, exist_ok=True)
 
@@ -124,11 +124,10 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
         subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-ac", "1", "-ar", "16000", output_segment], check=True)
 
-### Step 4: Run Vosk on Extracted Chunks ###
+### Step 4: Run Vosk to Extract Timestamps (NOT Text) ###
 def process_audio_for_word_timestamps(segment_folder):
     model = Model(VOSK_MODEL_PATH)
     word_timestamps = {}
-    srt_data = {}
 
     for segment_file in sorted(os.listdir(segment_folder)):
         segment_path = os.path.join(segment_folder, segment_file)
@@ -137,7 +136,6 @@ def process_audio_for_word_timestamps(segment_folder):
         rec = KaldiRecognizer(model, wf.getframerate())
         rec.SetWords(True)  
 
-        srt_output = []
         swear_timestamps = []
 
         while True:
@@ -149,12 +147,10 @@ def process_audio_for_word_timestamps(segment_folder):
                 for word in result["result"]:
                     start_time = round(word["start"], 2)
                     end_time = round(word["end"], 2)
-                    srt_output.append(f"{start_time:.2f} --> {end_time:.2f}\n{word['word']}\n")
-
+                    
                     if word["word"].lower() in SWEAR_WORDS:
                         swear_timestamps.append(f"{start_time:.2f} --> {end_time:.2f}")
 
-        srt_data[segment_file] = "\n".join(srt_output)
         word_timestamps[segment_file] = swear_timestamps
 
     swear_timestamp_file = os.path.join(PROCESSED_FOLDER, "swear_timestamps.txt")
@@ -162,17 +158,23 @@ def process_audio_for_word_timestamps(segment_folder):
         for timestamps in word_timestamps.values():
             f.write("\n".join(timestamps) + "\n")
 
-### ✅ Define `async_process_files()` BEFORE calling it! ###
+### ✅ Updated `async_process_files()` ###
 def async_process_files():
     global processing_status
     processing_status["completed"] = False
 
+    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
     mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
     clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
+    convert_mp4_to_mp3(mp4_path, mp3_path)
+    os.remove(mp4_path)  
+
+    process_subtitles(os.path.join(UPLOAD_FOLDER, "input.ass"))
+
     extract_required_chunks(mp3_path, clean_file, segment_folder)
-    os.remove(mp3_path)
+    os.remove(mp3_path)  
 
     process_audio_for_word_timestamps(segment_folder)
     processing_status["completed"] = True
