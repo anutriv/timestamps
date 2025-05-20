@@ -18,7 +18,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 PROCESSED_FOLDER = os.path.join(os.getcwd(), "processed")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static")
-VOSK_MODEL_PATH = os.path.join(os.getcwd(), "vosk-model")  # ✅ Ensure manual placement of Vosk model
+VOSK_MODEL_PATH = os.path.join(os.getcwd(), "vosk-model")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
@@ -80,12 +80,12 @@ def upload_files():
         return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200
 
     except Exception as e:
-        return jsonify({"error": f"Upload failed: {str(e)}"}), 500  # ✅ Always return JSON for errors
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500  
 
 ### Step 1: Convert MP4 to MP3 First ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     print(f"🔹 Converting {input_mp4} to MP3...")
-    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
+    subprocess.run(["ffmpeg", "-y", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
     print(f"✅ MP3 saved at {output_mp3}")
 
 ### Step 2: Extract Clean, Unclean & Output.ass ###
@@ -120,9 +120,18 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
         clean_lines = f.readlines()
 
     segment_time = 5
+
     for idx, _ in enumerate(clean_lines):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
-        subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-ac", "1", "-ar", "16000", output_segment], check=True)
+
+        print(f"🔹 Extracting chunk {idx} from MP3...")
+        subprocess.run([
+            "ffmpeg", "-y", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), 
+            "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", output_segment
+        ], check=True)
+
+        if not os.path.exists(output_segment) or os.path.getsize(output_segment) == 0:
+            print(f"❌ Failed to create {output_segment} - Skipping.")
 
 ### Step 4: Run Vosk to Extract Timestamps (NOT Text) ###
 def process_audio_for_word_timestamps(segment_folder):
@@ -169,12 +178,12 @@ def async_process_files():
     segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
     convert_mp4_to_mp3(mp4_path, mp3_path)
-    os.remove(mp4_path)  
+    os.remove(mp4_path)
 
     process_subtitles(os.path.join(UPLOAD_FOLDER, "input.ass"))
 
     extract_required_chunks(mp3_path, clean_file, segment_folder)
-    os.remove(mp3_path)  
+    os.remove(mp3_path)
 
     process_audio_for_word_timestamps(segment_folder)
     processing_status["completed"] = True
