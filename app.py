@@ -41,14 +41,21 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 WHISPER_CACHE_DIR = os.path.join(os.getcwd(), "whisper_models")
 os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory exists
 
-MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
-if not os.path.exists(MODEL_PATH):
-    print("🔹 Downloading Whisper model for the first time...")
-    whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
-    print("✅ Whisper model downloaded and cached.")
-else:
-    print("✅ Using cached Whisper model!")
-    whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+def load_whisper_once():
+    MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
+
+    if not hasattr(app, 'whisper_model'):
+        if not os.path.exists(MODEL_PATH):
+            print("🔹 Downloading Whisper model for the first time...")
+            app.whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+            print("✅ Whisper model downloaded and cached.")
+        else:
+            print("✅ Using cached Whisper model!")
+            app.whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+
+@app.before_first_request
+def preload_whisper():
+    load_whisper_once()
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
@@ -153,27 +160,6 @@ def upload_files():
         return jsonify({"error": f"File save failed: {str(e)}"}), 500
 
     return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200
-
-def async_process_files():
-    global processing_status
-    try:
-        processing_status["completed"] = False
-        mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
-        unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
-        segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
-
-        print("🔹 Extracting required chunks...")
-        extract_required_chunks(mp3_path, unclean_file, segment_folder)
-        os.remove(mp3_path)  # ✅ Delete MP3 after extracting chunks
-
-        process_audio_for_timestamps(segment_folder)
-        cleanup(segment_folder, mp3_path)  # ✅ Final cleanup
-
-        processing_status["completed"] = True
-
-    except Exception as e:
-        processing_status["completed"] = False
-        print(f"❌ Error in processing: {str(e)}")
 
 @app.route('/process', methods=['GET'])
 def process_files():
