@@ -77,7 +77,7 @@ def upload_files():
         ass_file.save(ass_path)
         mp4_file.save(mp4_path)
 
-        return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), =1024):
+        return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200):
            200
 
     except Exception as e:
