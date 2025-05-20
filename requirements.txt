@@ -1,11 +1,8 @@
 gunicorn
-whisper
+vosk
 nltk
 numpy
 ffmpeg-python
 flask-cors
 flask
 pydub
-openai-whisper
-torch
-torchvision
