@@ -61,9 +61,76 @@ if not os.path.exists(VOSK_MODEL_PATH):
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
 
+### **✅ Fix for JSON Response in Upload Endpoint**
+@app.route("/upload", methods=["POST"])
+def upload_files():
+    try:
+        if 'ass_file' not in request.files or 'mp4_file' not in request.files:
+            return jsonify({"error": "Missing ASS or MP4 file"}), 400
+
+        ass_file = request.files["ass_file"]
+        mp4_file = request.files["mp4_file"]
+
+        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+
+        ass_file.save(ass_path)
+        mp4_file.save(mp4_path)
+
+        return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), =1024):
+           200
+
+    except Exception as e:
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500  # ✅ Always return JSON for errors
+
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
-    clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+    clean f.write(chunk)
+
+    print("✅ Extracting Vosk model...")
+    subprocess.run(["unzip", "vosk-model.zip", "-d", VOSK_MODEL_PATH])
+    print("✅ Vosk model downloaded!")
+
+### **Serve index.html at `/`**
+@app.route("/")
+def serve_index():
+    return send_file(os.path.join(STATIC_FOLDER, "index.html"))
+
+### **✅ Fix for JSON Response in Upload Endpoint**
+@app.route("/upload", methods=["POST"])
+def upload_files():
+    try:
+        if 'ass_file' not in request.files or 'mp4_file' not in request.files:
+            return jsonify({"error": "Missing ASS or MP4 file"}), 400
+
+        ass_file = request.files["ass_file"]
+        mp4_file = request.files["mp4_file"]
+
+        ass_path = os.path.join(UPLOAD_FOLDER, "input.ass")
+        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+
+        ass_file.save(ass_path)
+        mp4_file.save(mp4_path)
+
+        return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Upload failed: {str(e)}"}), 500  # ✅ Always return JSON for errors
+
+### Step 1: Extract Clean, Unclean & Output.ass ###
+def process_subtitles(ass_path):
+    clean_file = os.path.join(PROCESSED_FOLDER_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+    unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
+
+    with open(ass_path, "r", encoding="utf-8") as f:
+        lines = f.readlines()
+
+    clean_lines = []
+    unclean_lines = []
+
+    for line in lines:
+        text = line.strip()
+       , "clean.txt")
     unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
 
     with open(ass_path, "r", encoding="utf-8") as f:
@@ -75,7 +142,16 @@ def process_subtitles(ass_path):
     for line in lines:
         text = line.strip()
         if re.search(r"[a-zA-Z]", text):
+ if re.search(r"[a-zA-Z]", text):
             clean_lines.append(text)
+        else:
+            unclean_lines.append(text)
+
+    with open(clean_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(clean_lines))
+
+    with open(unclean_file, "w", encoding="utf-8") as f:
+        f.write("\n".join(unclean_lines            clean_lines.append(text)
         else:
             unclean_lines.append(text)
 
@@ -85,13 +161,21 @@ def process_subtitles(ass_path):
     with open(unclean_file, "w", encoding="utf-8") as f:
         f.write("\n".join(unclean_lines))
 
+### Step 2: Convert))
+
 ### Step 2: Convert MP4 to MP3 ###
 def convert_mp4_to_mp3(input_mp4, output_mp3):
     print(f"🔹 Converting {input_mp4} to MP3...")
     subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
     print(f"✅ MP3 saved at {output_mp3}")
 
-### Step 3: Extract Required Chunks Based on Clean File ###
+ MP4 to MP3 ###
+def convert_mp4_to_mp3(input_mp4, output_mp3):
+    print(f"🔹 Converting {input_mp4} to MP3...")
+    subprocess.run(["ffmpeg", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
+    print(f"✅ MP3 saved at {output_mp3}")
+
+### Step 3: Extract### Step 3: Extract Required Chunks Based on Clean File ###
 def extract_required_chunks(mp3_path, clean_file, segment_folder):
     os.makedirs(segment_folder, exist_ok=True)
 
@@ -100,12 +184,26 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
 
     segment_time = 5  # Optimize segment length per clean line
     for idx, _ in enumerate(clean_lines):
-        output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
+        output_segment = os.path.join(segment_folder, f"segment Required Chunks Based on Clean File ###
+def extract_required_chunks(mp3_path, clean_file, segment_folder):
+    os.makedirs(segment_folder, exist_ok=True)
+
+    with open(clean_file, "r", encoding="utf-8") as f:
+        clean_lines = f.readlines()
+
+    segment_time = 5  # Optimize segment length per clean line
+    for idx, _ in enumerate(clean_lines):
+        output_segment = os.path.join(segment_{idx:03d}.wav")
         subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-ac", "1", "-ar", "16000", output_segment], check=True)
 
 ### Step 4: Run Vosk on Extracted Chunks ###
 def process_audio_for_word_timestamps(segment_folder):
-    model = Model(VOSK_MODEL_PATH)
+    model_folder, f"segment_{idx:03d}.wav")
+        subprocess.run(["ffmpeg", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), "-ac", "1", "-ar", "16000", output_segment], check=True)
+
+### Step 4: Run Vosk on Extracted Chunks ###
+def process_audio_for_word_timestamps(segment_folder):
+    model = Model(VOSK_MODEL = Model(VOSK_MODEL_PATH)
     word_timestamps = {}
     srt_data = {}
 
@@ -120,7 +218,22 @@ def process_audio_for_word_timestamps(segment_folder):
         swear_timestamps = []
 
         while True:
-            data = wf.readframes(4000)
+            data = wf.readframes_PATH)
+    word_timestamps = {}
+    srt_data = {}
+
+    for segment_file in sorted(os.listdir(segment_folder)):
+        segment_path = os.path.join(segment_folder, segment_file)
+        wf = wave.open(segment_path, "rb")
+
+        rec = KaldiRecognizer(model, wf.getframerate())
+        rec.SetWords(True)  # ✅ Enable word-level timing
+
+        srt_output = []
+        swear_timestamps = []
+
+        while True:
+           (4000)
             if len(data) == 0:
                 break
             if rec.AcceptWaveform(data):
@@ -128,18 +241,35 @@ def process_audio_for_word_timestamps(segment_folder):
                 for word in result["result"]:
                     start_time = round(word["start"], 2)
                     end_time = round(word["end"], 2)
-                    srt_output.append(f"{start_time:.2f} --> {end_time:.2f}\n{word['word']}\n")
+                    data = wf.readframes(4000)
+            if len(data) == 0:
+                break
+            if rec.AcceptWaveform(data):
+                result = json.loads(rec.Result())
+                for word in result["result"]:
+                    start_time = round(word["start"], 2)
+                    end_time = round(word["end"], 2)
+                    srt_output.append srt_output.append(f"{start_time:.2f} --> {end_time:.2f}\n{word['word']}\n")
 
                     if word["word"].lower() in SWEAR_WORDS:  # ✅ Capture swear words timing
-                        swear_timestamps.append(f"{start_time:.2f} --> {end_time:.2f}")
+                       (f"{start_time:.2f} --> {end_time:.2f}\n{word['word']}\n")
 
-        srt_data[segment_file] = "\n".join(srt_output)
-        word_timestamps[segment_file] = swear_timestamps
+                    if word["word"].lower() in SWEAR_WORDS:  # ✅ Capture swear words timing
+                        swear_timestamps swear_timestamps.append(f"{start_time:.2f} --> {end_time:.2f}")
 
-    # ✅ Generate final timestamp file for swear words
+.append(f"{start_time:.2f} --> {end_time:.2f}")
+
+        srt_data        srt_data[segment_file] = "\n".join(srt_output)
+        word_timestamps[segment_file] = swear_timestamps[segment_file] = "\n".join(srt_output)
+        word_timestamps[segment_file] =
+
     swear_timestamp_file = os.path.join(PROCESSED_FOLDER, "swear_timestamps.txt")
     with open(swear_timestamp_file, "w", encoding="utf-8") as f:
-        for timestamps in word_timestamps.values():
+        for timestamps swear_timestamps
+
+    swear_timestamp_file = os.path.join(PROCESSED_FOLDER, "swear_timestamps.txt")
+    with open(swear_timestamp_file, "w", encoding="utf-8") as f:
+ in word_timestamps.values():
             f.write("\n".join(timestamps) + "\n")
 
     return srt_data, swear_timestamp_file
@@ -149,23 +279,49 @@ def cleanup(segment_folder, mp3_path):
     shutil.rmtree(segment_folder)
     os.remove(mp3_path)  # ✅ Delete MP3 after chunk extraction
 
-### ✅ Fixed `async_process_files` definition BEFORE it's referenced ###
+###        for timestamps in word_timestamps.values():
+            f.write("\n".join(timestamps) + "\n")
+
+    return srt_data, swear_timestamp_file
+
+### Step 5: Cleanup Temporary Files ###
+def cleanup(segment_folder, mp3_path):
+    shutil.rmtree(segment_folder)
+    os.remove(mp3_path)  # ✅ Delete MP3 after chunk extraction
+
+### ✅ Fixed `async_process ✅ Fixed `async_process_files` definition BEFORE it's referenced ###
+def async_process_files():
+    global processing_status
+    try:
+        processing_status["completed"] = False
+        mp3_path = os.path.join(PROCESSED_FOLDER, "_files` definition BEFORE it's referenced ###
 def async_process_files():
     global processing_status
     try:
         processing_status["completed"] = False
         mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+       input.mp3")
         clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
         segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
 
         print("🔹 Extracting required chunks...")
-        extract_required_chunks(mp3_path, clean_file, segment_folder)
-        os.remove(mp3_path)  # ✅ Delete MP3 after extracting chunks
+        extract_required_chunks(mp3_path, clean_file, segment clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+        segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
+
+        print("🔹 Extracting required chunks...")
+        extract_required_chunks(mp3_path_folder)
+        os.remove(mp3_path)
 
         srt_data, swear_timestamp_file = process_audio_for_word_timestamps(segment_folder)
-        cleanup(segment_folder, mp3_path)  # ✅ Final cleanup
+        cleanup(segment_folder, mp3_path)  
 
-        processing_status["completed"] = True
+        processing, clean_file, segment_folder)
+        os.remove(mp3_path)
+
+        srt_data, swear_timestamp_file = process_audio_for_word_timestamps(segment_folder)
+        cleanup(segment_folder, mp3_path)  
+
+        processing_status["completed"] =_status["completed"] = True
 
     except Exception as e:
         processing_status["completed"] = False
@@ -173,7 +329,15 @@ def async_process_files():
 
 @app.route("/process", methods=["GET"])
 def process_files():
-    threading.Thread(target=async_process_files).start()
+    threading.Thread(target=async_process True
+
+    except Exception as e:
+        processing_status["completed"] = False
+        print(f"❌ Error in processing: {str(e)}")
+
+@app.route("/process", methods=["GET"])
+def process_files():
+    threading.Thread_files).start()
     return jsonify({"message": "Processing started"}), 202
 
 if __name__ == "__main__":
