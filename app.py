@@ -44,18 +44,18 @@ os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory
 def load_whisper_once():
     MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
 
-    if not hasattr(app, 'whisper_model'):
-        if not os.path.exists(MODEL_PATH):
-            print("🔹 Downloading Whisper model for the first time...")
-            app.whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
-            print("✅ Whisper model downloaded and cached.")
-        else:
-            print("✅ Using cached Whisper model!")
-            app.whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+    if not os.path.exists(MODEL_PATH):
+        print("🔹 Downloading Whisper model for the first time...")
+        global whisper_model
+        whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+        print("✅ Whisper model downloaded and cached.")
+    else:
+        print("✅ Using cached Whisper model!")
+        global whisper_model
+        whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
 
-@app.before_first_request
-def preload_whisper():
-    load_whisper_once()
+# ✅ Call this function manually **before starting the Flask app**
+load_whisper_once()
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
