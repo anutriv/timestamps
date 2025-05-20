@@ -42,6 +42,16 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 # ✅ Define a list of common swear words for filtering
 SWEAR_WORDS = ["damn", "hell", "shit", "fuck", "bitch", "bastard"]
 
+### **Landing Page Route to Confirm Server is Running**
+@app.route("/")
+def home():
+    return "Server is running! Use /upload and /process."
+
+### **Serve index.html Correctly**
+@app.route("/index")
+def serve_index():
+    return send_file(os.path.join(STATIC_FOLDER, "index.html"))
+
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
     clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
