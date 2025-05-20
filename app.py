@@ -41,7 +41,7 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 WHISPER_CACHE_DIR = os.path.join(os.getcwd(), "whisper_models")
 os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory exists
 
-whisper_model = None  # ✅ Declare globally **before assignment**
+whisper_model = None  # ✅ Declare globally before assignment
 
 def load_whisper_once():
     global whisper_model  # ✅ Declare as global at the start
@@ -57,7 +57,7 @@ def load_whisper_once():
             print("✅ Using cached Whisper model!")
             whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
 
-# ✅ Call this function **before starting the Flask app**
+# ✅ Call this function before Flask starts
 load_whisper_once()
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
@@ -132,6 +132,27 @@ def cleanup(segment_folder, mp3_path):
     shutil.rmtree(segment_folder)
     os.remove(mp3_path)  # ✅ Delete MP3 after chunk extraction
 
+### ✅ Fixed `async_process_files` definition BEFORE it's referenced ###
+def async_process_files():
+    global processing_status
+    try:
+        processing_status["completed"] = False
+        mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+        unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
+        segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
+
+        print("🔹 Extracting required chunks...")
+        extract_required_chunks(mp3_path, unclean_file, segment_folder)
+        os.remove(mp3_path)  # ✅ Delete MP3 after extracting chunks
+
+        process_audio_for_timestamps(segment_folder)
+        cleanup(segment_folder, mp3_path)  # ✅ Final cleanup
+
+        processing_status["completed"] = True
+    except Exception as e:
+        processing_status["completed"] = False
+        print(f"❌ Error in processing: {str(e)}")
+
 @app.route('/')
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
@@ -148,19 +169,12 @@ def upload_files():
     mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
     mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
 
-    try:
-        ass_file.save(ass_path)
-        mp4_file.save(mp4_path)
+    ass_file.save(ass_path)
+    mp4_file.save(mp4_path)
 
-        print("🔹 Extracting clean, unclean, and output.ass...")
-        process_subtitles(ass_path)
-
-        print("🔹 MP4 uploaded successfully. Converting to MP3...")
-        convert_mp4_to_mp3(mp4_path, mp3_path)
-        os.remove(mp4_path)  # ✅ Remove MP4 after MP3 is generated
-
-    except Exception as e:
-        return jsonify({"error": f"File save failed: {str(e)}"}), 500
+    process_subtitles(ass_path)
+    convert_mp4_to_mp3(mp4_path, mp3_path)
+    os.remove(mp4_path)  
 
     return jsonify({"success": True, "message": "Files uploaded. Click 'Start Processing' to begin."}), 200
 
