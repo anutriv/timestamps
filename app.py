@@ -7,6 +7,7 @@ import nltk
 import threading
 import json
 import wave
+import requests
 from vosk import Model, KaldiRecognizer
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
@@ -17,7 +18,7 @@ CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 PROCESSED_FOLDER = os.path.join(os.getcwd(), "processed")
 STATIC_FOLDER = os.path.join(os.getcwd(), "static")
-VOSK_MODEL_PATH = os.path.join(os.getcwd(), "vosk-model")  # Path to Vosk Model
+VOSK_MODEL_PATH = os.path.join(os.getcwd(), "vosk-model")  # ✅ Ensure manual placement of Vosk model
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
@@ -39,16 +40,24 @@ nltk.download("wordnet")
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
-# ✅ Define a list of common swear words for filtering
 SWEAR_WORDS = ["damn", "hell", "shit", "fuck", "bitch", "bastard"]
 
-### **Landing Page Route to Confirm Server is Running**
-@app.route("/")
-def home():
-    return "Server is running! Use /upload and /process."
+### **🔹 Automatic Vosk Model Download at Startup**
+VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip"
 
-### **Serve index.html Correctly**
-@app.route("/index")
+if not os.path.exists(VOSK_MODEL_PATH):
+    print("🔹 Downloading Vosk model for the first time...")
+    r = requests.get(VOSK_MODEL_URL, stream=True)
+    with open("vosk-model.zip", "wb") as f:
+        for chunk in r.iter_content(chunk_size=1024):
+            f.write(chunk)
+
+    print("✅ Extracting Vosk model...")
+    subprocess.run(["unzip", "vosk-model.zip", "-d", VOSK_MODEL_PATH])
+    print("✅ Vosk model downloaded!")
+
+### **Serve index.html at `/`**
+@app.route("/")
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
 
