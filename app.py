@@ -37,13 +37,14 @@ nltk.download('wordnet')
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
 
-### **Whisper Model Caching: Prevent Redundant Downloads**
-WHISPER_CACHE_DIR = os.path.expanduser("~/.cache/whisper")
-os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure cache directory exists
+### **Whisper Model Persistence: Prevent Redundant Downloads**
+WHISPER_CACHE_DIR = os.path.join(os.getcwd(), "whisper_models")
+os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory exists
 
-if not os.path.exists(os.path.join(WHISPER_CACHE_DIR, "tiny.pt")):
+MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
+if not os.path.exists(MODEL_PATH):
     print("🔹 Downloading Whisper model for the first time...")
-    whisper_model = whisper.load_model("tiny")
+    whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
     print("✅ Whisper model downloaded and cached.")
 else:
     print("✅ Using cached Whisper model!")
@@ -101,7 +102,7 @@ def process_audio_for_timestamps(segment_folder):
 
     def run_whisper(segment_path):
         print(f"🔹 Processing {segment_path} with Whisper...")
-        return subprocess.run(["whisper", segment_path, "--model", "tiny"], capture_output=True, text=True)
+        return subprocess.run(["whisper", segment_path, "--model", "tiny", "--model_dir", WHISPER_CACHE_DIR], capture_output=True, text=True)
 
     threads = []
     MAX_CONCURRENT_THREADS = 3  # ✅ Balanced approach to avoid overloading Render CPU
