@@ -41,20 +41,23 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 WHISPER_CACHE_DIR = os.path.join(os.getcwd(), "whisper_models")
 os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory exists
 
+whisper_model = None  # ✅ Declare globally **before assignment**
+
 def load_whisper_once():
+    global whisper_model  # ✅ Declare as global at the start
+
     MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
 
-    if not os.path.exists(MODEL_PATH):
-        print("🔹 Downloading Whisper model for the first time...")
-        global whisper_model
-        whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
-        print("✅ Whisper model downloaded and cached.")
-    else:
-        print("✅ Using cached Whisper model!")
-        global whisper_model
-        whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+    if whisper_model is None:  # ✅ Ensure it only loads once
+        if not os.path.exists(MODEL_PATH):
+            print("🔹 Downloading Whisper model for the first time...")
+            whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+            print("✅ Whisper model downloaded and cached.")
+        else:
+            print("✅ Using cached Whisper model!")
+            whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
 
-# ✅ Call this function manually **before starting the Flask app**
+# ✅ Call this function **before starting the Flask app**
 load_whisper_once()
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
