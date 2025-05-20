@@ -41,24 +41,16 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 WHISPER_CACHE_DIR = os.path.join(os.getcwd(), "whisper_models")
 os.makedirs(WHISPER_CACHE_DIR, exist_ok=True)  # ✅ Ensure persistent directory exists
 
-whisper_model = None  # ✅ Declare globally before assignment
-
-def load_whisper_once():
-    global whisper_model  # ✅ Declare as global at the start
-
+if "whisper_model" not in app.config:  # ✅ Store the model inside Flask app config to persist across requests
     MODEL_PATH = os.path.join(WHISPER_CACHE_DIR, "tiny.pt")
 
-    if whisper_model is None:  # ✅ Ensure it only loads once
-        if not os.path.exists(MODEL_PATH):
-            print("🔹 Downloading Whisper model for the first time...")
-            whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
-            print("✅ Whisper model downloaded and cached.")
-        else:
-            print("✅ Using cached Whisper model!")
-            whisper_model = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
-
-# ✅ Call this function before Flask starts
-load_whisper_once()
+    if not os.path.exists(MODEL_PATH):
+        print("🔹 Downloading Whisper model for the first time...")
+        app.config["whisper_model"] = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
+        print("✅ Whisper model downloaded and cached.")
+    else:
+        print("✅ Using cached Whisper model!")
+        app.config["whisper_model"] = whisper.load_model("tiny", download_root=WHISPER_CACHE_DIR)
 
 ### Step 1: Extract Clean, Unclean & Output.ass ###
 def process_subtitles(ass_path):
