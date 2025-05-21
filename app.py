@@ -120,7 +120,7 @@ def extract_required_chunks(mp3_path, clean_file, segment_folder):
         clean_lines = f.readlines()
 
     segment_time = 5
-    total_lines = len(clean_lines)  # ✅ Only process exact number of lines
+    total_lines = len(clean_lines)
 
     for idx in range(total_lines):
         output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
@@ -159,5 +159,6 @@ def process_files():
     threading.Thread(target=async_process_files).start()
     return jsonify({"message": "Processing started"}), 202
 
+### **✅ Remove Explicit Port Settings (Vercel assigns it dynamically)**
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run()
