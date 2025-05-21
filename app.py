@@ -26,16 +26,12 @@ app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB upload limit
 
 processing_status = {"completed": False}
 
-REQUIRED_PACKAGES = ["nltk"]
-def install_missing_packages():
-    for package in REQUIRED_PACKAGES:
-        try:
-            __import__(package)
-        except ImportError:
-            subprocess.run([sys.executable, "-m", "pip", "install", package], check=True)
+### **🔹 Fix for NLTK Read-Only Issue**
+NLTK_DATA_DIR = "/tmp/nltk_data"  # Vercel allows writing to /tmp
+os.makedirs(NLTK_DATA_DIR, exist_ok=True)  # Ensure writable directory
 
-install_missing_packages()
-nltk.download("wordnet")
+nltk.data.path.append(NLTK_DATA_DIR)
+nltk.download("wordnet", download_dir=NLTK_DATA_DIR)
 
 EXCEPTIONS = {"as", "pass", "bass"}
 lemmatizer = nltk.stem.WordNetLemmatizer()
