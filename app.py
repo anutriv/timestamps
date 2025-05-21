@@ -26,7 +26,7 @@ os.makedirs(PROCESSED_FOLDER, exist_ok=True)
 
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB upload limit
 
-processing_status = {"completed": False}
+processing_status = {"completed": False, "step": "Not started"}
 
 ### 🔹 **Fix for NLTK Read-Only Issue**
 NLTK_DATA_DIR = "/tmp/nltk_data"  # ✅ Use writable directory
@@ -96,6 +96,67 @@ def add_cors_headers(response):
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
+
+### 🔹 **✅ Real-Time Processing Status Endpoint**
+@app.route("/status", methods=["GET"])
+def get_status():
+    return jsonify({"processing_status": processing_status})
+
+### 🔹 **✅ Extract Audio Chunks Dynamically Based on Subtitle Timing**
+def extract_required_chunks(mp3_path, clean_file, segment_folder):
+    os.makedirs(segment_folder, exist_ok=True)
+
+    with open(clean_file, "r", encoding="utf-8") as f:
+        clean_lines = f.readlines()
+
+    for idx, line in enumerate(clean_lines):
+        try:
+            start_time, end_time, text = line.strip().split("|")  # Format: `start|end|text`
+            duration = float(end_time) - float(start_time)
+
+            output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
+
+            subprocess.run([
+                "ffmpeg", "-y", "-i", mp3_path, "-ss", str(start_time), "-t", str(duration), 
+                "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", output_segment
+            ], check=True)
+
+            if not os.path.exists(output_segment) or os.path.getsize(output_segment) == 0:
+                print(f"❌ Failed to create {output_segment} - Skipping.")
+        except ValueError:
+            print(f"❌ Error processing line {idx}: {line.strip()} - Skipping.")
+
+### 🔹 **✅ Updated `async_process_files()` with Debugging**
+def async_process_files():
+    global processing_status
+    processing_status["completed"] = False
+    processing_status["step"] = "Starting processing..."
+
+    try:
+        mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
+        mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
+        clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
+        segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
+
+        processing_status["step"] = "Converting MP4 to MP3..."
+        convert_mp4_to_mp3(mp4_path, mp3_path)
+
+        processing_status["step"] = "Processing subtitles..."
+        process_subtitles(os.path.join(UPLOAD_FOLDER, "input.ass"))
+
+        processing_status["step"] = "Extracting audio chunks dynamically..."
+        extract_required_chunks(mp3_path, clean_file, segment_folder)
+
+        processing_status["completed"] = True
+        processing_status["step"] = "Processing completed!"
+
+    except Exception as e:
+        processing_status["step"] = f"Error: {str(e)}"
+
+@app.route("/process", methods=["GET"])
+def process_files():
+    threading.Thread(target=async_process_files).start()
+    return jsonify({"message": "Processing started"}), 202
 
 ### **✅ Remove Explicit Port Settings (Vercel assigns it dynamically)**
 if __name__ == "__main__":
