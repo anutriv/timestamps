@@ -13,7 +13,9 @@ from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder="static")
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# ✅ Allow requests from your Vercel frontend
+CORS(app, resources={r"/*": {"origins": "https://timestamps-umber.vercel.app"}})
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
 PROCESSED_FOLDER = os.path.join(os.getcwd(), "processed")
@@ -26,9 +28,9 @@ app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024 * 1024  # 2GB upload limit
 
 processing_status = {"completed": False}
 
-### **🔹 Fix for NLTK Read-Only Issue**
-NLTK_DATA_DIR = "/tmp/nltk_data"  # Vercel allows writing to /tmp
-os.makedirs(NLTK_DATA_DIR, exist_ok=True)  # Ensure writable directory
+### 🔹 **Fix for NLTK Read-Only Issue**
+NLTK_DATA_DIR = "/tmp/nltk_data"  # ✅ Use writable directory
+os.makedirs(NLTK_DATA_DIR, exist_ok=True)  # Ensure `/tmp/nltk_data` exists
 
 nltk.data.path.append(NLTK_DATA_DIR)
 nltk.download("wordnet", download_dir=NLTK_DATA_DIR)
@@ -38,7 +40,7 @@ lemmatizer = nltk.stem.WordNetLemmatizer()
 
 SWEAR_WORDS = ["damn", "hell", "shit", "fuck", "bitch", "bastard"]
 
-### **🔹 Automatic Vosk Model Download at Startup**
+### 🔹 **Automatic Vosk Model Download at Startup**
 VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-en-us-0.22.zip"
 
 if not os.path.exists(VOSK_MODEL_PATH):
@@ -52,12 +54,12 @@ if not os.path.exists(VOSK_MODEL_PATH):
     subprocess.run(["unzip", "vosk-model.zip", "-d", VOSK_MODEL_PATH])
     print("✅ Vosk model downloaded!")
 
-### **Serve index.html at `/`**
+### 🔹 **Serve index.html at `/`**
 @app.route("/")
 def serve_index():
     return send_file(os.path.join(STATIC_FOLDER, "index.html"))
 
-### **✅ Fix for JSON Response in Upload Endpoint**
+### 🔹 **✅ Fix for JSON Response in Upload Endpoint**
 @app.route("/upload", methods=["POST"])
 def upload_files():
     try:
@@ -78,82 +80,22 @@ def upload_files():
     except Exception as e:
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500  
 
-### Step 1: Convert MP4 to MP3 First ###
-def convert_mp4_to_mp3(input_mp4, output_mp3):
-    print(f"🔹 Converting {input_mp4} to MP3...")
-    subprocess.run(["ffmpeg", "-y", "-i", input_mp4, "-q:a", "0", "-map", "a", output_mp3], check=True)
-    print(f"✅ MP3 saved at {output_mp3}")
+### 🔹 **✅ Handle Preflight CORS Requests**
+@app.route("/upload", methods=["OPTIONS"])
+def handle_preflight():
+    response = jsonify({"message": "Preflight request handled"})
+    response.headers["Access-Control-Allow-Origin"] = "https://timestamps-umber.vercel.app"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
 
-### Step 2: Extract Clean, Unclean & Output.ass ###
-def process_subtitles(ass_path):
-    clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
-    unclean_file = os.path.join(PROCESSED_FOLDER, "unclean.txt")
-
-    with open(ass_path, "r", encoding="utf-8") as f:
-        lines = f.readlines()
-
-    clean_lines = []
-    unclean_lines = []
-
-    for line in lines:
-        text = line.strip()
-        if re.search(r"[a-zA-Z]", text):
-            clean_lines.append(text)
-        else:
-            unclean_lines.append(text)
-
-    with open(clean_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(clean_lines))
-
-    with open(unclean_file, "w", encoding="utf-8") as f:
-        f.write("\n".join(unclean_lines))
-
-### Step 3: Extract Audio Chunks Based on Clean.txt ###
-def extract_required_chunks(mp3_path, clean_file, segment_folder):
-    os.makedirs(segment_folder, exist_ok=True)
-
-    with open(clean_file, "r", encoding="utf-8") as f:
-        clean_lines = f.readlines()
-
-    segment_time = 5
-    total_lines = len(clean_lines)
-
-    for idx in range(total_lines):
-        output_segment = os.path.join(segment_folder, f"segment_{idx:03d}.wav")
-
-        print(f"🔹 Extracting chunk {idx} for subtitle {idx+1}/{total_lines}...")
-        subprocess.run([
-            "ffmpeg", "-y", "-i", mp3_path, "-ss", str(idx * segment_time), "-t", str(segment_time), 
-            "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", output_segment
-        ], check=True)
-
-        if not os.path.exists(output_segment) or os.path.getsize(output_segment) == 0:
-            print(f"❌ Failed to create {output_segment} - Skipping.")
-
-### ✅ Updated `async_process_files()` ###
-def async_process_files():
-    global processing_status
-    processing_status["completed"] = False
-
-    mp4_path = os.path.join(UPLOAD_FOLDER, "input.mp4")
-    mp3_path = os.path.join(PROCESSED_FOLDER, "input.mp3")
-    clean_file = os.path.join(PROCESSED_FOLDER, "clean.txt")
-    segment_folder = os.path.join(PROCESSED_FOLDER, "audio_segments")
-
-    convert_mp4_to_mp3(mp4_path, mp3_path)
-    os.remove(mp4_path)
-
-    process_subtitles(os.path.join(UPLOAD_FOLDER, "input.ass"))
-
-    extract_required_chunks(mp3_path, clean_file, segment_folder)
-    os.remove(mp3_path)
-
-    processing_status["completed"] = True
-
-@app.route("/process", methods=["GET"])
-def process_files():
-    threading.Thread(target=async_process_files).start()
-    return jsonify({"message": "Processing started"}), 202
+### 🔹 **✅ Add CORS Headers for All Responses**
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "https://timestamps-umber.vercel.app"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    return response
 
 ### **✅ Remove Explicit Port Settings (Vercel assigns it dynamically)**
 if __name__ == "__main__":
