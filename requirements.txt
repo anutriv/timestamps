@@ -1,8 +1,6 @@
-gunicorn
-vosk
+Flask
+Flask-Cors
 nltk
-numpy
+vosk
+requests
 ffmpeg-python
-flask-cors
-flask
-pydub
